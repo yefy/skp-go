@@ -12,7 +12,8 @@ import (
 	//"encoding/binary"
 	_ "bytes"
 	_ "encoding/binary"
-	//"github.com/davecheney/profile"
+
+	"github.com/davecheney/profile"
 	"github.com/widuu/goini"
 	//"skpPublic/skpProtocol"
 	"skp/skpPublic/skpUtility"
@@ -58,7 +59,7 @@ func (this *SkpTcpService) SkpService() {
 	//cp /tmp/profile664139879/mem.pprof ./
 	//go tool pprof --pdf go-skp-server mem.pprof > mem-report.pdf
 
-	//defer profile.Start(profile.CPUProfile).Stop()
+	defer profile.Start(profile.CPUProfile).Stop()
 	//defer profile.Start(profile.MemProfile).Stop()
 
 	sig := skpUtility.SkpNewSignal()
