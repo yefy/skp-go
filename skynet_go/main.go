@@ -6,8 +6,8 @@ import (
 	"log"
 	"os"
 	"reflect"
-	"skynet_go/service"
-	"skynet_go/test"
+	"skp-go/skynet_go/service"
+	"skp-go/skynet_go/test"
 	"strconv"
 	"time"
 )
