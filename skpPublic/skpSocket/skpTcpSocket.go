@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+
 	//"runtime"
-	"skp/skpPublic/skpProtocol"
-	"skp/skpPublic/skpUtility"
+	"skp-go/skpPublic/skpProtocol"
+	"skp-go/skpPublic/skpUtility"
 	"strconv"
 	"strings"
 	"sync"

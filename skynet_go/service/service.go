@@ -8,34 +8,32 @@ import (
 	"sync"
 )
 
-type MsgPool struct {
+type SyncList struct {
 	sync.Mutex
 	list *list.List
 }
 
-func NewMsgPool() *MsgPool {
-	pool := &MsgPool{}
-	pool.list = list.New()
-	return pool
+func NewSyncList() *SyncList {
+	syncList := &SyncList{}
+	syncList.list = list.New()
+	return syncList
 }
 
-func (self *MsgPool) push(data interface{}) {
+func (self *SyncList) push(data interface{}) {
 	self.Lock()
 	defer self.Unlock()
 	self.list.PushBack(data)
 }
 
-func (self *MsgPool) pop() interface{} {
+func (self *SyncList) pop() interface{} {
 	self.Lock()
 	defer self.Unlock()
 	data := self.list.Front()
 	if data == nil {
-		msg := &Msg{}
-		msg.pending = make(chan interface{}, 1)
-		return msg
-	} else {
-		return self.list.Remove(data)
+		return nil
 	}
+	self.list.Remove(data)
+	return data
 }
 
 type Msg struct {
@@ -54,8 +52,8 @@ type Service struct {
 	waitGroup   *sync.WaitGroup
 	ctx         context.Context
 	cancel      context.CancelFunc
-	msgPool     *MsgPool
-	//funcMethod      map[string]*ObjectMethod
+	msgPool     *sync.Pool
+	funcMethod  map[uint64]*ObjMethod
 }
 
 func NewService(coNumber int, cacheNumber int, objFunc interface{}, argv ...interface{}) *Service {
@@ -77,6 +75,7 @@ func NewService(coNumber int, cacheNumber int, objFunc interface{}, argv ...inte
 	service.cacheNumber = cacheNumber
 	service.cache = make(chan interface{}, cacheNumber)
 	service.coNumber = coNumber
+	service.funcMethod = make(map[uint64]*ObjMethod)
 
 	methods := GetMethod(obj)
 	for _, value := range methods {
@@ -85,7 +84,12 @@ func NewService(coNumber int, cacheNumber int, objFunc interface{}, argv ...inte
 
 	fmt.Printf("service = %+v \n", service)
 
-	service.msgPool = NewMsgPool()
+	service.msgPool = &sync.Pool{New: func() interface{} {
+		msg := &Msg{}
+		msg.pending = make(chan interface{}, 1)
+		return msg
+	},
+	}
 
 	service.waitGroup = &sync.WaitGroup{}
 	service.ctx, service.cancel = context.WithCancel(context.Background())
@@ -115,7 +119,7 @@ func (self *Service) start(index int) {
 			if msg.isRet {
 				msg.pending <- retValue
 			} else {
-				self.msgPool.push(msg)
+				self.msgPool.Put(msg)
 			}
 		}
 	}
@@ -138,7 +142,7 @@ func (self *Service) Send(funcName string, argv ...interface{}) {
 		panic(fmt.Sprintf("len(argv):%+v != objM.argvIn:%+v \n", len(argv), objM.argvIn))
 	}
 
-	msg := self.msgPool.pop().(*Msg)
+	msg := self.msgPool.Get().(*Msg)
 	msg.funcName = funcName
 	msg.argvs = argv
 	msg.isRet = false
@@ -149,7 +153,12 @@ func (self *Service) Send(funcName string, argv ...interface{}) {
 func (self *Service) Call(retFunc interface{}, funcName string, argv ...interface{}) {
 	fmt.Printf("Service Call retFunc = %+v, funcName =%+v \n", retFunc, funcName)
 	CheckKind(retFunc, reflect.Func)
-	funcM := GetMethod(retFunc)[0]
+	funcAddr := uint64(reflect.ValueOf(retFunc).Pointer())
+	funcM := self.funcMethod[funcAddr]
+	if funcM == nil {
+		funcM = GetMethod(retFunc)[0]
+		self.funcMethod[funcAddr] = funcM
+	}
 	fmt.Printf("funcM = %+v \n", funcM)
 	objM := self.objMethod[funcName]
 	fmt.Printf("objM = %+v", objM)
@@ -164,7 +173,7 @@ func (self *Service) Call(retFunc interface{}, funcName string, argv ...interfac
 		panic(fmt.Sprintf("funcM.argvIn:%+v != objM.argvOut:%+v \n", funcM.argvIn, objM.argvOut))
 	}
 
-	msg := self.msgPool.pop().(*Msg)
+	msg := self.msgPool.Get().(*Msg)
 	msg.funcName = funcName
 	msg.argvs = argv
 	msg.isRet = true
@@ -175,7 +184,7 @@ func (self *Service) Call(retFunc interface{}, funcName string, argv ...interfac
 	if funcM.argvIn != len(retValue) {
 		panic(fmt.Sprintf("funcM.argvIn:%+v != len(retValue):%+v \n", funcM.argvIn, len(retValue)))
 	}
-	self.msgPool.push(msg)
+	self.msgPool.Put(msg)
 
 	argvValue := GetInterfaceValue(retValue)
 	funcM.value.Call(argvValue)

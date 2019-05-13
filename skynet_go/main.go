@@ -161,11 +161,85 @@ func main1() {
 	logg.Printf("down")
 }
 
+func fTest2(data interface{}) {
+	fmt.Printf("data = %+v \n", data)
+}
+
+func fTest() {
+	f1 := func() {
+		fmt.Println("ffff")
+	}
+	fTest2(f1)
+	f2 := func() {
+		fmt.Println("ffff")
+	}
+	fTest2(f2)
+
+	fTest2(func() {
+		fmt.Println("ffff")
+	})
+
+	fTest2(func() {
+		fmt.Println("ffff")
+	})
+}
+
+func counter(start int) (func() int, func()) {
+	// if the value gets mutated, the same is reflected in closure
+	ctr := func() int {
+		return start
+	}
+
+	incr := func() {
+		start++
+	}
+
+	// both ctr and incr have same reference to start
+	// closures are created, but are not called
+	return ctr, incr
+}
+
 func main() {
 	if false {
 		main1()
 	}
+
+	if false {
+		for i := 0; i < 2; i++ {
+			fTest()
+		}
+		n := 1
+		x := 2
+		_ = n
+		_ = x
+		for i := 0; i < 2; i++ {
+			fTest()
+		}
+	}
+
 	if true {
+		// ctr, incr and ctr1, incr1 are different
+		ctr, incr := counter(100)
+		ctr1, incr1 := counter(100)
+		fmt.Println("counter - ", ctr())
+		fmt.Println("counter1 - ", ctr1())
+		// incr by 1
+		incr()
+		fmt.Println("counter - ", ctr())
+		fmt.Println("counter1- ", ctr1())
+		// incr1 by 2
+		incr1()
+		incr1()
+		fmt.Println("counter - ", ctr())
+		fmt.Println("counter1- ", ctr1())
+	}
+
+	if false {
+		fnn := func() {
+			fmt.Println("ffff")
+		}
+		addr := int64(reflect.ValueOf(fnn).Pointer())
+		fmt.Printf("addr = %#x, fnn = %+v \n", addr, fnn)
 		for i := 0; i < 2; i++ {
 			fmt.Printf("main index = %+v \n", i)
 			testService := service.NewService(1, 1, test.NewTest)
