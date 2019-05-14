@@ -157,7 +157,7 @@ func (self *Service) Call(retFunc interface{}, funcName string, argv ...interfac
 	funcM := self.funcMethod[funcAddr]
 	if funcM == nil {
 		funcM = GetMethod(retFunc)[0]
-		self.funcMethod[funcAddr] = funcM
+		//self.funcMethod[funcAddr] = funcM
 	}
 	fmt.Printf("funcM = %+v \n", funcM)
 	objM := self.objMethod[funcName]
