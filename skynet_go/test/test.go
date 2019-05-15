@@ -50,3 +50,15 @@ func (self *Test) RetArgv2(argv1 int, argv2 string) (int, string) {
 	fmt.Println("Test retArgv2 argv1 = ", argv1, "argv2 = ", argv2)
 	return argv1, argv2
 }
+
+func (self *Test) RetArgvAddr2(argv1 int, argv2 int) (int, int) {
+	argv2 = 123
+	fmt.Printf("Test retArgv1 argv1 = %+v, argv2 = %+v \n", argv1, argv2)
+	return argv1, argv2
+}
+
+func (self *Test) RetArgvAddrX2(argv1 int, argv2 *int) (int, int) {
+	*argv2 = 123
+	fmt.Printf("Test retArgv1 argv1 = %+v, argv2 = %+v \n", argv1, *argv2)
+	return argv1, *argv2
+}

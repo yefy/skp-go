@@ -200,10 +200,12 @@ func counter(start int) (func() int, func()) {
 }
 
 func testNewService(service *service.Service, num int) {
-	f1 := func(argv1 int) {
-		fmt.Printf("ffff RetArgv1 = %+v, num = %+v \n", argv1, num)
+	addrNum := 1
+	f1 := func(argv1 int, addrNumin int) {
+		fmt.Printf("ffff RetArgv1 = %+v, num = %+v, addrNumin = %+v \n", argv1, num, addrNumin)
 	}
-	service.Call(f1, "RetArgv1", num)
+	service.Call(f1, "RetArgvAddrX2", num, &addrNum)
+	fmt.Printf("ffff addrNum = %+v \n", addrNum)
 }
 
 func main() {
