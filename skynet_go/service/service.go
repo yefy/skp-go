@@ -36,15 +36,29 @@ func (self *SyncList) pop() interface{} {
 	return data
 }
 
+var isTest bool = false
+
 type Msg struct {
-	funcName string
-	argvs    interface{}
-	pending  chan interface{}
-	isRet    bool
+	typ     string
+	method  string
+	args    interface{}
+	reply   interface{}
+	pending chan interface{}
+}
+
+type ObjMethod struct {
+	name      string
+	method    reflect.Method
+	value     reflect.Value
+	argType   reflect.Type
+	replyType reflect.Type
 }
 
 type Service struct {
 	objName     string
+	objType     reflect.Type
+	objValue    reflect.Value
+	objKind     reflect.Kind
 	objMethod   map[string]*ObjMethod
 	cacheNumber int
 	cache       chan interface{}
@@ -53,35 +67,51 @@ type Service struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	msgPool     *sync.Pool
-	funcMethod  map[uint64]*ObjMethod
 }
 
-func NewService(coNumber int, cacheNumber int, objFunc interface{}, argv ...interface{}) *Service {
-	fmt.Printf("NewService coNumber = %+v, cacheNumber = %+v, len(argv) = %+v \n", coNumber, cacheNumber, len(argv))
-	CheckKind(objFunc, reflect.Func)
-	argvValue := GetArgvValue(argv...)
-	funcM := GetMethod(objFunc)[0]
-	retValue := funcM.value.Call(argvValue)
-	if len(retValue) != 1 {
-		panic("len(objectValues) != 1")
+func checkKind(obj interface{}, checkKind reflect.Kind) {
+	objKind := reflect.TypeOf(obj).Kind()
+	if objKind != checkKind {
+		panic(fmt.Sprintf("checkKind = %+v, objKind = %+v \n", checkKind, objKind))
 	}
+}
 
-	obj := retValue[0].Interface()
-	CheckKind(obj, reflect.Ptr)
+func parseMethod(service *Service, obj interface{}) {
+	service.objType = reflect.TypeOf(obj)
+	service.objKind = service.objType.Kind()
+	if service.objKind != reflect.Ptr {
+		panic("service.objKind != reflect.Ptr")
+	}
+	service.objValue = reflect.ValueOf(obj)
+	service.objName = reflect.Indirect(service.objValue).Type().Name()
 
+	for i := 0; i < service.objType.NumMethod(); i++ {
+		method := service.objType.Method(i)
+		mtype := method.Type
+		objM := &ObjMethod{}
+		objM.method = method
+		objM.name = method.Name // method.Func
+		objM.value = service.objValue.MethodByName(method.Name)
+		//objM.argvIn = objM.value.Type().NumIn()
+		//objM.argvOut = objM.value.Type().NumOut()
+		//objM.argType = mtype.In(1)
+		//objM.replyType = mtype.In(2)
+		fmt.Printf("objM = %+v \n", objM)
+		service.objMethod[objM.name] = objM
+
+		fmt.Printf("argName = %+v, replyName = %+v \n", mtype.In(1).Name(), mtype.In(2).Elem().Name())
+	}
+}
+
+func NewService(coNumber int, cacheNumber int, obj interface{}) *Service {
+	fmt.Printf("NewService coNumber = %+v, cacheNumber = %+v \n", coNumber, cacheNumber)
 	service := &Service{}
-	service.objName = GetObjName(obj)
 	service.objMethod = make(map[string]*ObjMethod)
 	service.cacheNumber = cacheNumber
 	service.cache = make(chan interface{}, cacheNumber)
 	service.coNumber = coNumber
-	service.funcMethod = make(map[uint64]*ObjMethod)
 
-	methods := GetMethod(obj)
-	for _, value := range methods {
-		service.objMethod[value.name] = value
-	}
-
+	parseMethod(service, obj)
 	fmt.Printf("service = %+v \n", service)
 
 	service.msgPool = &sync.Pool{New: func() interface{} {
@@ -112,12 +142,12 @@ func (self *Service) start(index int) {
 		case msgInterface := <-self.cache:
 			msg := msgInterface.(*Msg)
 			fmt.Printf("msg = %+v \n", msg)
-			argvs := msg.argvs.([]interface{})
-			argvValue := GetArgvsValue(argvs)
-			retValue := self.objMethod[msg.funcName].value.Call(argvValue)
+			objMethod := self.objMethod[msg.method]
+			objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)}) //([]reflect.Value{msg.args, msg.reply})
+			//method.method.Func.Call([]reflect.Value{self.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)}) //([]reflect.Value{msg.args, msg.reply})
 
-			if msg.isRet {
-				msg.pending <- retValue
+			if msg.typ == "call" {
+				msg.pending <- msg
 			} else {
 				self.msgPool.Put(msg)
 			}
@@ -132,60 +162,44 @@ func (self *Service) Stop() {
 }
 
 func (self *Service) Send(funcName string, argv ...interface{}) {
-	fmt.Printf("Service Send funcName = %+v \n", funcName)
-	objM := self.objMethod[funcName]
-	fmt.Printf("objM = %+v \n", objM)
-	if objM == nil {
-		panic(fmt.Sprintf("not funcName = %+v \n", funcName))
-	}
-	if len(argv) != objM.argvIn {
-		panic(fmt.Sprintf("len(argv):%+v != objM.argvIn:%+v \n", len(argv), objM.argvIn))
-	}
+	/*
+		fmt.Printf("Service Send funcName = %+v \n", funcName)
+		objM := self.objMethod[funcName]
+		fmt.Printf("objM = %+v \n", objM)
+		if objM == nil {
+			panic(fmt.Sprintf("not funcName = %+v \n", funcName))
+		}
+		if len(argv) != objM.argvIn {
+			panic(fmt.Sprintf("len(argv):%+v != objM.argvIn:%+v \n", len(argv), objM.argvIn))
+		}
 
-	msg := self.msgPool.Get().(*Msg)
-	msg.funcName = funcName
-	msg.argvs = argv
-	msg.isRet = false
+		msg := self.msgPool.Get().(*Msg)
+		msg.funcName = funcName
+		msg.argvs = argv
+		msg.isRet = false
 
-	self.cache <- msg
+		self.cache <- msg
+	*/
 }
 
-func (self *Service) Call(retFunc interface{}, funcName string, argv ...interface{}) {
-	fmt.Printf("Service Call retFunc = %+v, funcName =%+v \n", retFunc, funcName)
-	CheckKind(retFunc, reflect.Func)
-	funcAddr := uint64(reflect.ValueOf(retFunc).Pointer())
-	funcM := self.funcMethod[funcAddr]
-	if funcM == nil {
-		funcM = GetMethod(retFunc)[0]
-		//self.funcMethod[funcAddr] = funcM
-	}
-	fmt.Printf("funcM = %+v \n", funcM)
-	objM := self.objMethod[funcName]
+func (self *Service) Call(method string, args interface{}, reply interface{}) {
+	fmt.Printf("Service Call method =%+v \n", method)
+	checkKind(reply, reflect.Ptr)
+	objM := self.objMethod[method]
 	fmt.Printf("objM = %+v", objM)
 	if objM == nil {
-		panic(fmt.Sprintf("not funcName = %+v \n", funcName))
-	}
-	if len(argv) != objM.argvIn {
-		panic(fmt.Sprintf("len(argv):%+v != objM.argvIn:%+v\n", len(argv), objM.argvIn))
-	}
-
-	if funcM.argvIn != objM.argvOut {
-		panic(fmt.Sprintf("funcM.argvIn:%+v != objM.argvOut:%+v \n", funcM.argvIn, objM.argvOut))
+		panic(fmt.Sprintf("not method = %+v \n", method))
 	}
 
 	msg := self.msgPool.Get().(*Msg)
-	msg.funcName = funcName
-	msg.argvs = argv
-	msg.isRet = true
+	msg.typ = "call"
+	msg.method = method
+	msg.args = args
+	msg.reply = reply
 
 	self.cache <- msg
 
-	retValue := (<-msg.pending).([]reflect.Value)
-	if funcM.argvIn != len(retValue) {
-		panic(fmt.Sprintf("funcM.argvIn:%+v != len(retValue):%+v \n", funcM.argvIn, len(retValue)))
-	}
-	self.msgPool.Put(msg)
+	<-msg.pending
 
-	argvValue := GetInterfaceValue(retValue)
-	funcM.value.Call(argvValue)
+	self.msgPool.Put(msg)
 }

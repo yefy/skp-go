@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-type ObjMethod struct {
+type ObjMethodx struct {
 	name    string
 	value   reflect.Value
 	argvIn  int
@@ -31,15 +31,15 @@ func GetObjName(obj interface{}) string {
 	return ""
 }
 
-func GetMethod(obj interface{}) []*ObjMethod {
+func GetMethod(obj interface{}) []*ObjMethodx {
 	objType := reflect.TypeOf(obj)
 	objKind := objType.Kind()
 	if objKind == reflect.Ptr {
-		var mSlice []*ObjMethod
+		var mSlice []*ObjMethodx
 		objValue := reflect.ValueOf(obj)
 		for i := 0; i < objType.NumMethod(); i++ {
 			m := objType.Method(i)
-			objM := &ObjMethod{}
+			objM := &ObjMethodx{}
 			objM.name = m.Name
 			objM.value = objValue.MethodByName(m.Name)
 			objM.argvIn = objM.value.Type().NumIn()
@@ -49,9 +49,9 @@ func GetMethod(obj interface{}) []*ObjMethod {
 		}
 		return mSlice
 	} else if objKind == reflect.Func {
-		var mSlice []*ObjMethod
+		var mSlice []*ObjMethodx
 		objValue := reflect.ValueOf(obj)
-		objM := &ObjMethod{}
+		objM := &ObjMethodx{}
 		objM.name = ""
 		objM.value = objValue
 		objM.argvIn = objM.value.Type().NumIn()

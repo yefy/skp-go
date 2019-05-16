@@ -201,14 +201,18 @@ func counter(start int) (func() int, func()) {
 
 func testNewService(service *service.Service, num int) {
 	addrNum := 1
-	f1 := func(argv1 int, addrNumin int) {
-		fmt.Printf("ffff RetArgv1 = %+v, num = %+v, addrNumin = %+v \n", argv1, num, addrNumin)
-	}
-	service.Call(f1, "RetArgvAddrX2", num, &addrNum)
+
+	service.Call("RetArgvAddrX2", num, &addrNum)
 	fmt.Printf("ffff addrNum = %+v \n", addrNum)
 }
 
 func main() {
+
+	n := 0
+	t := test.NewTest()
+	testService := service.NewService(1, 1, t)
+	testService.Call("ArgStru", 1, &n)
+	fmt.Printf("n = %+v \n", n)
 
 	if false {
 		main1()
@@ -244,7 +248,7 @@ func main() {
 		fmt.Println("counter1- ", ctr1())
 	}
 
-	if true {
+	if false {
 		num := 1
 		testService := service.NewService(1, 1, test.NewTest)
 		testNewService(testService, num)
@@ -268,20 +272,11 @@ func main() {
 			testService.Send("Print1", 1)
 			testService.Send("Print2", 1, "2")
 
-			f := func() {
-				fmt.Printf("ffff num = %+v \n", num)
-			}
-			testService.Call(f, "RetArgv")
+			testService.Call("RetArgv", 1, 1)
 
-			f1 := func(argv1 int) {
-				fmt.Printf("ffff RetArgv1 = %+v, num = %+v \n", argv1, num)
-			}
-			testService.Call(f1, "RetArgv1", 1)
+			testService.Call("RetArgv1", 1, 1)
 
-			f2 := func(argv1 int, argv2 string) {
-				fmt.Printf("fff RetArgv2 argv1 = %+v, argv2 = %+v, num = %+v  \n", argv1, argv2, num)
-			}
-			testService.Call(f2, "RetArgv2", 1, "2")
+			testService.Call("RetArgv2", 1, "2")
 
 			//	testService1 := service.NewService(test.NewTestArgv1, 1)
 			//	testService1.Send("Print")
