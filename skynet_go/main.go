@@ -37,13 +37,6 @@ func add(n int, n2 int) {
 
 }
 
-func afeee() {
-	f := func(a string, b string) {
-		fmt.Println("ffff = ", a, b)
-	}
-	fmt.Println("f addr = ", f)
-}
-
 func tsfaf(ag ...interface{}) {
 	for key, value := range ag {
 		fmt.Println(key, value)
@@ -207,12 +200,15 @@ func testNewService(service *service.Service, num int) {
 }
 
 func main() {
-
 	n := 0
 	t := test.NewTest()
 	testService := service.NewService(1, 1, t)
-	testService.Call("ArgStru", 1, &n)
-	fmt.Printf("n = %+v \n", n)
+	err := testService.Call("ArgStru", 1, &n)
+	if err == nil {
+		fmt.Printf("n = %+v \n", n)
+	} else {
+		fmt.Printf("err = %+v \n", err.Error())
+	}
 
 	if false {
 		main1()
@@ -292,29 +288,6 @@ func main() {
 	}
 
 	if false {
-
-		tsfaf(1, 2, 3)
-
-		afeee()
-		var faf1 int
-		afeee()
-		var faf2 int
-		var faf3 int
-		afeee()
-		var faf4 int
-		var faf5 int
-		var faf6 int
-		afeee()
-		var faf7 int
-		var faf8 int
-		afeee()
-		var faf9 int
-		var faf10 int
-
-		go afeee()
-		go afeee()
-
-		fmt.Println(faf1, faf2, faf3, faf4, faf5, faf6, faf7, faf8, faf9, faf10)
 
 		if true {
 			vType := reflect.TypeOf(add)

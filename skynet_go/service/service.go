@@ -36,22 +36,28 @@ func (self *SyncList) pop() interface{} {
 	return data
 }
 
-var isTest bool = false
+var isTest bool = true
 
 type Msg struct {
-	typ     string
+	typ     string //call send
 	method  string
 	args    interface{}
 	reply   interface{}
 	pending chan interface{}
+	err     interface{}
 }
 
 type ObjMethod struct {
 	name      string
 	method    reflect.Method
+	typ       reflect.Type
 	value     reflect.Value
+	argvIn    int
+	argvOut   int
 	argType   reflect.Type
 	replyType reflect.Type
+	argName   string
+	replyName string
 }
 
 type Service struct {
@@ -69,13 +75,6 @@ type Service struct {
 	msgPool     *sync.Pool
 }
 
-func checkKind(obj interface{}, checkKind reflect.Kind) {
-	objKind := reflect.TypeOf(obj).Kind()
-	if objKind != checkKind {
-		panic(fmt.Sprintf("checkKind = %+v, objKind = %+v \n", checkKind, objKind))
-	}
-}
-
 func parseMethod(service *Service, obj interface{}) {
 	service.objType = reflect.TypeOf(obj)
 	service.objKind = service.objType.Kind()
@@ -87,19 +86,32 @@ func parseMethod(service *Service, obj interface{}) {
 
 	for i := 0; i < service.objType.NumMethod(); i++ {
 		method := service.objType.Method(i)
-		mtype := method.Type
 		objM := &ObjMethod{}
 		objM.method = method
+		objM.typ = method.Type
 		objM.name = method.Name // method.Func
 		objM.value = service.objValue.MethodByName(method.Name)
-		//objM.argvIn = objM.value.Type().NumIn()
-		//objM.argvOut = objM.value.Type().NumOut()
-		//objM.argType = mtype.In(1)
-		//objM.replyType = mtype.In(2)
-		fmt.Printf("objM = %+v \n", objM)
+		objM.argvIn = objM.value.Type().NumIn()
+		objM.argvOut = objM.value.Type().NumOut()
+		objM.argType = objM.typ.In(1)
+		objM.replyType = objM.typ.In(2)
 		service.objMethod[objM.name] = objM
+		fmt.Printf("objM = %+v \n", objM)
 
-		fmt.Printf("argName = %+v, replyName = %+v \n", mtype.In(1).Name(), mtype.In(2).Elem().Name())
+		if objM.argvIn != 2 {
+			panic("objM.argvIn != 2")
+		}
+
+		if objM.argvOut != 1 {
+			panic("objM.argvOut != 1")
+		}
+
+		if objM.replyType.Kind() != reflect.Ptr {
+			panic("objM.replyType.Kind() != reflect.Ptr")
+		}
+
+		objM.argName = objM.argType.Name()
+		objM.replyName = objM.replyType.Elem().Name()
 	}
 }
 
@@ -143,10 +155,11 @@ func (self *Service) start(index int) {
 			msg := msgInterface.(*Msg)
 			fmt.Printf("msg = %+v \n", msg)
 			objMethod := self.objMethod[msg.method]
-			objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)}) //([]reflect.Value{msg.args, msg.reply})
-			//method.method.Func.Call([]reflect.Value{self.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)}) //([]reflect.Value{msg.args, msg.reply})
+			retErrs := objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
+			//objMethod.method.Func.Call([]reflect.Value{self.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
 
 			if msg.typ == "call" {
+				msg.err = retErrs[0].Interface()
 				msg.pending <- msg
 			} else {
 				self.msgPool.Put(msg)
@@ -159,6 +172,26 @@ func (self *Service) Stop() {
 	self.cancel()
 	self.waitGroup.Wait()
 	fmt.Printf("Service stop \n")
+}
+
+func (self *Service) checkArgv(objMethod *ObjMethod, args interface{}, reply interface{}) {
+	if isTest == false {
+		return
+	}
+	replyKind := reflect.TypeOf(reply).Kind()
+	if replyKind != reflect.Ptr {
+		panic(fmt.Sprintf("replyKind:%+v != reflect.Ptr \n", replyKind))
+	}
+
+	argName := reflect.TypeOf(args).Name()
+	if argName != objMethod.argName {
+		panic(fmt.Sprintf("argName:%+v != objMethod.argName:%+v \n", argName, objMethod.argName))
+	}
+
+	replyName := reflect.TypeOf(reply).Elem().Name()
+	if replyName != objMethod.replyName {
+		panic(fmt.Sprintf("argName:%+v != objMethod.argName:%+v \n", argName, objMethod.argName))
+	}
 }
 
 func (self *Service) Send(funcName string, argv ...interface{}) {
@@ -182,14 +215,14 @@ func (self *Service) Send(funcName string, argv ...interface{}) {
 	*/
 }
 
-func (self *Service) Call(method string, args interface{}, reply interface{}) {
+func (self *Service) Call(method string, args interface{}, reply interface{}) error {
 	fmt.Printf("Service Call method =%+v \n", method)
-	checkKind(reply, reflect.Ptr)
 	objM := self.objMethod[method]
 	fmt.Printf("objM = %+v", objM)
 	if objM == nil {
 		panic(fmt.Sprintf("not method = %+v \n", method))
 	}
+	self.checkArgv(objM, args, reply)
 
 	msg := self.msgPool.Get().(*Msg)
 	msg.typ = "call"
@@ -198,8 +231,11 @@ func (self *Service) Call(method string, args interface{}, reply interface{}) {
 	msg.reply = reply
 
 	self.cache <- msg
-
 	<-msg.pending
-
+	err := msg.err
 	self.msgPool.Put(msg)
+	if err == nil {
+		return nil
+	}
+	return err.(error)
 }
