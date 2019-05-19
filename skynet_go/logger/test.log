@@ -1,0 +1,6 @@
+test | 2019/05/19 23:22:43.030299 | logger_test.go:32 | skp-go/skynet_go/logger.Test_New | 7 |   all | Test_New
+test | 2019/05/19 23:22:43.030299 | logger_test.go:33 | skp-go/skynet_go/logger.Test_New | 7 | debug | Test_New
+test | 2019/05/19 23:22:43.030299 | logger_test.go:34 | skp-go/skynet_go/logger.Test_New | 7 | trace | Test_New
+test | 2019/05/19 23:22:43.030299 | logger_test.go:35 | skp-go/skynet_go/logger.Test_New | 7 |   err | Test_New
+test | 2019/05/19 23:22:43.030299 | logger_test.go:36 | skp-go/skynet_go/logger.Test_New | 7 | fatal | Test_New
+test | 2019/05/19 23:22:43.030299 | logger_test.go:37 | skp-go/skynet_go/logger.Test_New | 7 | fatal | Test_New
