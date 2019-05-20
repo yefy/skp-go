@@ -1,7 +1,6 @@
 package rpc
 
 import (
-	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"testing"
 )
@@ -19,42 +18,25 @@ import (
 //go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -memprofile  profile_mem.out
 //go tool pprof -pdf profile_mem.out > profile_mem.pdf
 
-type ServiceTest_b struct {
-	Num int
+type ServerTest_b struct {
 }
 
-var errTestb error = errorCode.NewErrCode(0, "TestErr")
-
-func NewServiceTest_b() *ServiceTest_b {
-	serviceTest := &ServiceTest_b{}
-	return serviceTest
+func NewServerTest_b() *ServerTest_b {
+	serverTest := &ServerTest_b{}
+	return serverTest
 }
-func (serviceTest *ServiceTest_b) Test(in int, out *int) error {
+func (serverTest *ServerTest_b) ExampleSuccess(in int, out *int) error {
 	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "Test Num:%+v != in:%+v", serviceTest.Num, in))
-	}
-	log.Debug("Test in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
 	return nil
 }
 
-func (serviceTest *ServiceTest_b) TestErr(in int, out *int) error {
-	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "TestErr Num:%+v != in:%+v", serviceTest.Num, in))
-	}
-	log.Debug("TestErr in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
-	return errTestb
-}
-
-func Benchmark_Test(b *testing.B) {
+func Benchmark_ExampleSuccess(b *testing.B) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest_b()
+	serverTest := NewServerTest_b()
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		serviceTest.Num = in
-		err := serviceTest.Test(in, &out)
+		err := serverTest.ExampleSuccess(in, &out)
 		if err != nil {
 			b.Error()
 		}
@@ -64,16 +46,15 @@ func Benchmark_Test(b *testing.B) {
 	}
 }
 
-func Benchmark_Test_rpc_call(b *testing.B) {
+func Benchmark_ExampleSuccess_call(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest_b()
-	server := NewServer(1, 1, serviceTest)
+	serverTest := NewServerTest_b()
+	server := NewServer(1, 1, serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		serviceTest.Num = in
-		err := server.Call("Test", in, &out)
+		err := server.Call("ExampleSuccess", in, &out)
 		if err != nil {
 			b.Error()
 		}
@@ -84,16 +65,15 @@ func Benchmark_Test_rpc_call(b *testing.B) {
 	server.Stop()
 }
 
-func Benchmark_Test_rpc_Send(b *testing.B) {
+func Benchmark_ExampleSuccess_Send(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest_b()
-	server := NewServer(1, 1000, serviceTest)
+	serverTest := NewServerTest_b()
+	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		serviceTest.Num = in
-		err := server.Send("Test", in, &out)
+		err := server.Send("ExampleSuccess", in, &out)
 		if err != nil {
 			b.Error()
 		}

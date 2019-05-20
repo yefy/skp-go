@@ -52,7 +52,7 @@ func (c *CondTest) Recv() {
 			}
 			c.sendCond.Wait()
 		}
-		log.Debug("sendData = %+v", sendData.(int))
+		//log.Debug("sendData = %+v", sendData.(int))
 		c.sendCond.L.Unlock()
 		if c.typ == "call" {
 			c.recvCond.L.Lock()
@@ -74,33 +74,46 @@ func (c *CondTest) Start() {
 
 func (c *CondTest) Close() {
 	<-c.done
-	log.Fatal("Close")
+	//log.Fatal("Close")
 }
 
-func (c *CondTest) Call() {
+func (c *CondTest) Call() error {
 	c.number++
+	sendData := c.number
 	c.sendCond.L.Lock()
-	c.sendList.PushBack(c.number)
+	c.sendList.PushBack(sendData)
 	c.sendCond.Signal()
+	c.sendCond.L.Unlock()
+
+	var recvData interface{} = 0
 	c.recvCond.L.Lock()
-	c.sendCond.L.Unlock()
-	c.recvCond.Wait()
-	frontData := c.recvList.Front()
-	c.recvList.Remove(frontData)
-	recvData := frontData.Value
+	for {
+		frontData := c.recvList.Front()
+		if frontData != nil {
+			c.recvList.Remove(frontData)
+			recvData = frontData.Value
+			break
+		}
+		c.recvCond.Wait()
+	}
 	c.recvCond.L.Unlock()
-	log.Debug("recvData = %+v", recvData.(int))
+	if sendData != recvData.(int) {
+		panic("Call error")
+	}
+	//log.Debug("recvData = %+v", recvData.(int))
+	return nil
 }
 
-func (c *CondTest) Send() {
+func (c *CondTest) Send() error {
 	c.number++
 	c.sendCond.L.Lock()
 	c.sendList.PushBack(c.number)
 	c.sendCond.Signal()
 	c.sendCond.L.Unlock()
+	return nil
 }
 
-func Benchmark_rpc_cond_Call(b *testing.B) {
+func Benchmark_cond_Call(b *testing.B) {
 	log.SetLevel(log.Lnone)
 	c := NewCondTest()
 	c.typ = "call"
@@ -113,7 +126,7 @@ func Benchmark_rpc_cond_Call(b *testing.B) {
 	c.Close()
 }
 
-func Benchmark_rpc_cond_Send(b *testing.B) {
+func Benchmark_cond_Send(b *testing.B) {
 	log.SetLevel(log.Lnone)
 	c := NewCondTest()
 	c.typ = "send"

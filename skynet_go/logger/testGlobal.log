@@ -4,3 +4,9 @@ testGlobal | 2019/05/19 23:22:43.028306 | logger_test.go:23 | skp-go/skynet_go/l
 testGlobal | 2019/05/19 23:22:43.028306 | logger_test.go:24 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 |   err | Test_NewGlobalLogger
 testGlobal | 2019/05/19 23:22:43.028306 | logger_test.go:25 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | fatal | Test_NewGlobalLogger
 testGlobal | 2019/05/19 23:22:43.028306 | logger_test.go:26 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | fatal | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:58.976382 | logger_test.go:21 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 |   all | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:58.988548 | logger_test.go:22 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | debug | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:59.000540 | logger_test.go:23 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | trace | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:59.000540 | logger_test.go:24 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 |   err | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:59.000540 | logger_test.go:25 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | fatal | Test_NewGlobalLogger
+testGlobal | 2019/05/20 23:21:59.000540 | logger_test.go:26 | skp-go/skynet_go/logger.Test_NewGlobalLogger | 6 | fatal | Test_NewGlobalLogger

@@ -6,41 +6,41 @@ import (
 	"testing"
 )
 
-type ServiceTest struct {
-	Num int
+type ServerTest struct {
+	data int
 }
 
-var errTest error = errorCode.NewErrCode(0, "TestErr")
+var errExampleFailed error = errorCode.NewErrCode(0, "ExampleFailed")
 
-func NewServiceTest() *ServiceTest {
-	serviceTest := &ServiceTest{}
-	return serviceTest
+func NewServerTest() *ServerTest {
+	serverTest := &ServerTest{}
+	return serverTest
 }
-func (serviceTest *ServiceTest) Test(in int, out *int) error {
+func (serverTest *ServerTest) ExampleSuccess(in int, out *int) error {
 	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "Test Num:%+v != in:%+v", serviceTest.Num, in))
+	if serverTest.data != in {
+		return log.Panic(errorCode.NewErrCode(0, "data:%+v != in:%+v", serverTest.data, in))
 	}
-	log.Debug("Test in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
+	//log.Debug("in = %+v, out = %+v, data = %+v \n", in, *out, serverTest.data)
 	return nil
 }
 
-func (serviceTest *ServiceTest) TestErr(in int, out *int) error {
+func (serverTest *ServerTest) ExampleFailed(in int, out *int) error {
 	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "TestErr Num:%+v != in:%+v", serviceTest.Num, in))
+	if serverTest.data != in {
+		return log.Panic(errorCode.NewErrCode(0, "data:%+v != in:%+v", serverTest.data, in))
 	}
-	log.Debug("TestErr in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
-	return errTest
+	//log.Debug("in = %+v, out = %+v, data = %+v \n", in, *out, serverTest.data)
+	return errExampleFailed
 }
 
-func Test_Test(t *testing.T) {
+func Test_ExampleSuccess(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
+	serverTest := NewServerTest()
 	in := 1
 	out := 0
-	serviceTest.Num = in
-	err := serviceTest.Test(in, &out)
+	serverTest.data = in
+	err := serverTest.ExampleSuccess(in, &out)
 	if err != nil {
 		t.Error()
 	}
@@ -49,33 +49,33 @@ func Test_Test(t *testing.T) {
 	}
 }
 
-func Test_TestErr(t *testing.T) {
+func Test_ExampleFailed(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
+	serverTest := NewServerTest()
 	in := 2
 	out := 0
-	serviceTest.Num = in
-	err := serviceTest.TestErr(in, &out)
+	serverTest.data = in
+	err := serverTest.ExampleFailed(in, &out)
 	if in != out {
 		t.Error()
 	}
 	if err == nil {
 		t.Error()
 	}
-	if err != errTest {
+	if err != errExampleFailed {
 		t.Error()
 	}
 
 }
 
-func Test_TestAll(t *testing.T) {
+func Test_ExampleSuccess_ExampleFailed(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
+	serverTest := NewServerTest()
 	if true {
 		in := 1
 		out := 0
-		serviceTest.Num = in
-		err := serviceTest.Test(in, &out)
+		serverTest.data = in
+		err := serverTest.ExampleSuccess(in, &out)
 		if err != nil {
 			t.Error()
 		}
@@ -86,67 +86,68 @@ func Test_TestAll(t *testing.T) {
 	if true {
 		in := 2
 		out := 0
-		serviceTest.Num = in
-		err := serviceTest.TestErr(in, &out)
+		serverTest.data = in
+		err := serverTest.ExampleFailed(in, &out)
 		if in != out {
 			t.Error()
 		}
 		if err == nil {
 			t.Error()
 		}
-		if err != errTest {
+		if err != errExampleFailed {
 			t.Error()
 		}
 	}
 }
 
-func Test_Test_rpc(t *testing.T) {
+func Test_ExampleSuccess_Call(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
-	server := NewServer(1, 1, serviceTest)
+	serverTest := NewServerTest()
+	server := NewServer(1, 1, serverTest)
 
 	in := 1
 	out := 0
-	serviceTest.Num = in
-	err := server.Call("Test", in, &out)
+	serverTest.data = in
+	err := server.Call("ExampleSuccess", in, &out)
 	if err != nil {
 		t.Error()
 	}
 	if in != out {
 		t.Error()
 	}
-
+	server.Stop()
 }
 
-func Test_TestErr_rpc(t *testing.T) {
+func Test_ExampleFailed_Call(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
-	server := NewServer(1, 1, serviceTest)
+	serverTest := NewServerTest()
+	server := NewServer(1, 1, serverTest)
 
 	in := 2
 	out := 0
-	serviceTest.Num = in
-	err := server.Call("TestErr", in, &out)
+	serverTest.data = in
+	err := server.Call("ExampleFailed", in, &out)
 	if in != out {
 		t.Error()
 	}
 	if err == nil {
 		t.Error()
 	}
-	if err != errTest {
+	if err != errExampleFailed {
 		t.Error()
 	}
+	server.Stop()
 }
 
-func Test_TestAll_rpc(t *testing.T) {
+func Test_ExampleSuccess_ExampleFailed_Call(t *testing.T) {
 	log.SetLevel(log.Lnone)
-	serviceTest := NewServiceTest()
-	server := NewServer(1, 1, serviceTest)
+	serverTest := NewServerTest()
+	server := NewServer(1, 1, serverTest)
 	if true {
 		in := 1
 		out := 0
-		serviceTest.Num = in
-		err := server.Call("Test", in, &out)
+		serverTest.data = in
+		err := server.Call("ExampleSuccess", in, &out)
 		if err != nil {
 			t.Error()
 		}
@@ -157,18 +158,19 @@ func Test_TestAll_rpc(t *testing.T) {
 	if true {
 		in := 2
 		out := 0
-		serviceTest.Num = in
-		err := server.Call("TestErr", in, &out)
+		serverTest.data = in
+		err := server.Call("ExampleFailed", in, &out)
 		if in != out {
 			t.Error()
 		}
 		if err == nil {
 			t.Error()
 		}
-		if err != errTest {
+		if err != errExampleFailed {
 			t.Error()
 		}
 	}
+	server.Stop()
 }
 
 //go test

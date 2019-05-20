@@ -2,8 +2,6 @@ package rpc
 
 import (
 	"fmt"
-	_ "skp-go/skynet_go/errorCode"
-	_ "skp-go/skynet_go/logger"
 	"sync"
 	"testing"
 	"time"
@@ -55,6 +53,7 @@ func wait_for_chan(m map[int]int) {
 }
 
 func Test_MutexOrChannel(t *testing.T) {
+	_ = t
 	doneMutex = make(chan interface{}, 1)
 	doneChan = make(chan interface{}, 1)
 
@@ -68,9 +67,7 @@ func Test_MutexOrChannel(t *testing.T) {
 	}
 	<-doneMutex
 	<-doneChan
-	if false {
-		t.Error()
-	}
+
 	// === RUN   Test_Main
 	// 2019-05-19 21:25:05.2059403 +0800 CST m=+10.018200201 chan finish
 	// 2019-05-19 21:25:06.7557944 +0800 CST m=+11.568054301 mutex finish

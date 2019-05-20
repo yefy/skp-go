@@ -1,41 +1,12 @@
 package rpc
 
 import (
-	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"sync"
 	"testing"
 )
 
 //go test -test.bench=. server_chanEx_benchmark_test.go
-
-type ServiceTest_bEx struct {
-	Num int
-}
-
-var errTestbEx error = errorCode.NewErrCode(0, "TestErr")
-
-func NewServiceTest_bEx() *ServiceTest_bEx {
-	serviceTest := &ServiceTest_bEx{}
-	return serviceTest
-}
-func (serviceTest *ServiceTest_bEx) Test(in int, out *int) error {
-	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "Test Num:%+v != in:%+v", serviceTest.Num, in))
-	}
-	log.Debug("Test in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
-	return nil
-}
-
-func (serviceTest *ServiceTest_bEx) TestErr(in int, out *int) error {
-	*out = in
-	if serviceTest.Num != in {
-		return log.Panic(errorCode.NewErrCode(0, "TestErr Num:%+v != in:%+v", serviceTest.Num, in))
-	}
-	log.Debug("TestErr in = %+v, out = %+v, Num = %+v \n", in, *out, serviceTest.Num)
-	return errTestbEx
-}
 
 type ChanTestEx struct {
 	send       chan interface{}
@@ -45,19 +16,9 @@ type ChanTestEx struct {
 	number     int
 	sendNumber int
 	recvNumber int
-	server     *ServiceTest_bEx
+	server     *ServerTest_b
 	err        error
 	msgPool    *sync.Pool
-}
-
-type MsgEx struct {
-	typ     string //call send
-	method  string
-	args    interface{}
-	reply   interface{}
-	pending chan interface{}
-	err     interface{}
-	//callValue []reflect.Value
 }
 
 func NewChanTestEx(sendChanNumber int) *ChanTestEx {
@@ -69,12 +30,11 @@ func NewChanTestEx(sendChanNumber int) *ChanTestEx {
 	c.number = 0
 	c.sendNumber = 0
 	c.recvNumber = 0
-	c.server = NewServiceTest_bEx()
+	c.server = NewServerTest_b()
 
 	c.msgPool = &sync.Pool{New: func() interface{} {
-		msg := &MsgEx{}
+		msg := &Msg{}
 		msg.pending = make(chan interface{}, 1)
-		//msg.callValue = make([]reflect.Value, 3)
 		return msg
 	},
 	}
@@ -83,16 +43,16 @@ func NewChanTestEx(sendChanNumber int) *ChanTestEx {
 
 func (c *ChanTestEx) Recv() {
 	for {
-		msgint := <-c.send
-		msg := msgint.(*MsgEx)
+		send := <-c.send
+		msg := send.(*Msg)
 		sendData := msg.args
-		log.Debug("sendData = %+v", sendData.(int))
-		in := 1
+		//log.Debug("sendData = %+v", sendData.(int))
+
 		out := 0
-		c.server.Num = in
-		c.err = c.server.Test(in, &out)
+		err := c.server.ExampleSuccess(sendData.(int), &out)
 		if c.typ == "call" {
-			msg.reply = in
+			msg.reply = out
+			msg.err = err
 			c.recv <- msg
 		} else {
 			c.msgPool.Put(msg)
@@ -111,30 +71,34 @@ func (c *ChanTestEx) Start() {
 
 func (c *ChanTestEx) Close() {
 	<-c.done
-	log.Fatal("Close")
+	//log.Fatal("Close")
 }
 
 func (c *ChanTestEx) Call() error {
 	c.number++
-	msg := c.msgPool.Get().(*MsgEx)
-	msg.args = c.number
+	sendData := c.number
+	msg := c.msgPool.Get().(*Msg)
+	msg.args = sendData
 	c.send <- msg
-	revemsgint := <-c.recv
-	revemsg := revemsgint.(*MsgEx)
-	reveData := revemsg.reply
-	log.Debug("reveData = %+v", reveData.(int))
+	recv := <-c.recv
+	reveMsg := recv.(*Msg)
+	reveData := reveMsg.reply
+	if sendData != reveData.(int) {
+		panic("Call error")
+	}
+	//log.Debug("reveData = %+v", reveData.(int))
 	return nil
 }
 
 func (c *ChanTestEx) Send() error {
 	c.number++
-	msg := c.msgPool.Get().(*MsgEx)
+	msg := c.msgPool.Get().(*Msg)
 	msg.args = c.number
 	c.send <- msg
 	return nil
 }
 
-func Benchmark_rpc_chanEx_Call(b *testing.B) {
+func Benchmark_ExampleSuccess_chanData_Call(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	c := NewChanTestEx(1)
@@ -147,7 +111,7 @@ func Benchmark_rpc_chanEx_Call(b *testing.B) {
 	c.Close()
 }
 
-func Benchmark_rpc_chanEx_Send(b *testing.B) {
+func Benchmark_ExampleSuccess_chanData_Send(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	c := NewChanTestEx(1000)

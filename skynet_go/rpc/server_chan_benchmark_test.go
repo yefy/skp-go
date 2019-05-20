@@ -32,7 +32,7 @@ func NewChanTest(sendChanNumber int) *ChanTest {
 func (c *ChanTest) Recv() {
 	for {
 		sendData := <-c.send
-		log.Debug("sendData = %+v", sendData.(int))
+		//log.Debug("sendData = %+v", sendData.(int))
 		if c.typ == "call" {
 			c.recv <- sendData
 		}
@@ -50,22 +50,28 @@ func (c *ChanTest) Start() {
 
 func (c *ChanTest) Close() {
 	<-c.done
-	log.Fatal("Close")
+	//log.Fatal("Close")
 }
 
-func (c *ChanTest) Call() {
+func (c *ChanTest) Call() error {
 	c.number++
-	c.send <- c.number
+	sendData := c.number
+	c.send <- sendData
 	reveData := <-c.recv
-	log.Debug("reveData = %+v", reveData.(int))
+	if sendData != reveData.(int) {
+		panic("Call error")
+	}
+	//log.Debug("reveData = %+v", reveData.(int))
+	return nil
 }
 
-func (c *ChanTest) Send() {
+func (c *ChanTest) Send() error {
 	c.number++
 	c.send <- c.number
+	return nil
 }
 
-func Benchmark_rpc_chan_Call(b *testing.B) {
+func Benchmark_chan_Call(b *testing.B) {
 	log.SetLevel(log.Lnone)
 	c := NewChanTest(1)
 	c.typ = "call"
@@ -77,7 +83,7 @@ func Benchmark_rpc_chan_Call(b *testing.B) {
 	c.Close()
 }
 
-func Benchmark_rpc_chan_Send(b *testing.B) {
+func Benchmark_chan_Send(b *testing.B) {
 	log.SetLevel(log.Lnone)
 	c := NewChanTest(1000)
 	c.typ = "send"
