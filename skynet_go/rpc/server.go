@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/utility"
 	"sync"
 	"sync/atomic"
 )
@@ -18,6 +19,7 @@ type Msg struct {
 	reply   interface{}
 	pending chan interface{}
 	err     interface{}
+	//callValue []reflect.Value
 }
 
 type ObjMethod struct {
@@ -34,6 +36,7 @@ type ObjMethod struct {
 }
 
 type Server struct {
+	obj         interface{}
 	objName     string
 	objType     reflect.Type
 	objValue    reflect.Value
@@ -45,10 +48,11 @@ type Server struct {
 	waitGroup   *sync.WaitGroup
 	ctx         context.Context
 	cancel      context.CancelFunc
-	msgPool     *sync.Pool
-	sendNumber  int32
-	recvNumber  int32
-	done        int32
+	//msgPool     *sync.Pool
+	msgPool    *utility.SyncPool
+	sendNumber int32
+	recvNumber int32
+	done       int32
 }
 
 func parseMethod(server *Server, obj interface{}) error {
@@ -96,6 +100,7 @@ func parseMethod(server *Server, obj interface{}) error {
 func NewServer(coNumber int, cacheNumber int, obj interface{}) *Server {
 	log.All("NewServer coNumber = %+v, cacheNumber = %+v", coNumber, cacheNumber)
 	server := &Server{}
+	server.obj = obj
 	server.objMethod = make(map[string]*ObjMethod)
 	server.cacheNumber = cacheNumber
 	server.cache = make(chan interface{}, cacheNumber)
@@ -111,12 +116,20 @@ func NewServer(coNumber int, cacheNumber int, obj interface{}) *Server {
 
 	log.All("server = %+v", server)
 
-	server.msgPool = &sync.Pool{New: func() interface{} {
+	// server.msgPool = &sync.Pool{New: func() interface{} {
+	// 	msg := &Msg{}
+	// 	msg.pending = make(chan interface{}, 1)
+	// 	//msg.callValue = make([]reflect.Value, 3)
+	// 	return msg
+	// },
+	// }
+
+	server.msgPool = utility.NewSyncPool(func() interface{} {
 		msg := &Msg{}
 		msg.pending = make(chan interface{}, 1)
+		//msg.callValue = make([]reflect.Value, 3)
 		return msg
-	},
-	}
+	})
 
 	server.waitGroup = &sync.WaitGroup{}
 	server.ctx, server.cancel = context.WithCancel(context.Background())
@@ -145,8 +158,15 @@ func (server *Server) start(index int) {
 			log.All("%+v msg = %+v", server.objName, msg)
 
 			objMethod := server.objMethod[msg.method]
-			retErrs := objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
-			//objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
+			// msg.callValue[0] = reflect.ValueOf(msg.args)
+			// msg.callValue[1] = reflect.ValueOf(msg.reply)
+			// retErrs := objMethod.value.Call(msg.callValue)
+			//retErrs := objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
+			// msg.callValue[0] = server.objValue
+			// msg.callValue[1] = reflect.ValueOf(msg.args)
+			// msg.callValue[2] = reflect.ValueOf(msg.reply)
+			// retErrs := objMethod.method.Func.Call(msg.callValue)
+			retErrs := objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
 
 			if msg.typ == "call" {
 				msg.err = retErrs[0].Interface()

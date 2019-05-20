@@ -7,6 +7,17 @@ import (
 )
 
 //go test -test.bench=. server_benchmark_test.go server.go
+//go test -run=xxx -bench=. -benchtime="3s" -cpuprofile profile_cpu.out
+//go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -cpuprofile profile_cpu.out
+//go tool pprof app.test profile_cpu.out
+//#top10
+//go tool pprof -svg profile_cpu.out > profile_cpu.svg
+//go tool pprof -pdf profile_cpu.out > profile_cpu.pdf
+
+//go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -cpuprofile profile_cpu.out
+//go tool pprof -pdf profile_cpu.out > profile_cpu.pdf
+//go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -memprofile  profile_mem.out
+//go tool pprof -pdf profile_mem.out > profile_mem.pdf
 
 type ServiceTest_b struct {
 	Num int
@@ -54,6 +65,7 @@ func Benchmark_Test(b *testing.B) {
 }
 
 func Benchmark_Test_rpc_call(b *testing.B) {
+	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	serviceTest := NewServiceTest_b()
 	server := NewServer(1, 1, serviceTest)
@@ -73,6 +85,7 @@ func Benchmark_Test_rpc_call(b *testing.B) {
 }
 
 func Benchmark_Test_rpc_Send(b *testing.B) {
+	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	serviceTest := NewServiceTest_b()
 	server := NewServer(1, 1000, serviceTest)
