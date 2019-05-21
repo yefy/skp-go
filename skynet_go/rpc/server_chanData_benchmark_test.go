@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-//go test -test.bench=. server_chanEx_benchmark_test.go
+//go test -test.bench=Benchmark_ExampleSuccess_chanData_* server_chanData_benchmark_test.go server_benchmark_test.go server.go
 
 type ChanTestEx struct {
 	send       chan interface{}
@@ -48,13 +48,14 @@ func (c *ChanTestEx) Recv() {
 		sendData := msg.args
 		//log.Debug("sendData = %+v", sendData.(int))
 
-		out := 0
-		err := c.server.ExampleSuccess(sendData.(int), &out)
 		if c.typ == "call" {
+			out := 0
+			err := c.server.ExampleSuccessCall(sendData.(int), &out)
 			msg.reply = out
 			msg.err = err
 			c.recv <- msg
 		} else {
+			c.server.ExampleSuccessSend(sendData.(int))
 			c.msgPool.Put(msg)
 		}
 		c.recvNumber++

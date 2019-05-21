@@ -16,7 +16,7 @@ var lock sync.Mutex
 
 var m1 map[int]int
 var m2 map[int]int
-var max int = 500000
+var max int = 100000
 var doneMutex chan interface{}
 var doneChan chan interface{}
 

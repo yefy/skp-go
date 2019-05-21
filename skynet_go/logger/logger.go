@@ -379,7 +379,8 @@ func (l *Logger) Panic(err error) error {
 
 func Panic(err error) error {
 	if Lerr < std.level {
-		return nil
+		panic(err)
+		return err
 	}
 	std.Output(Lerr, 2, err.Error())
 	panic(err)

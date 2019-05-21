@@ -25,18 +25,27 @@ func NewServerTest_b() *ServerTest_b {
 	serverTest := &ServerTest_b{}
 	return serverTest
 }
-func (serverTest *ServerTest_b) ExampleSuccess(in int, out *int) error {
+func (serverTest *ServerTest_b) ExampleSuccessCall(in int, out *int) error {
 	*out = in
 	return nil
 }
 
-func Benchmark_ExampleSuccess(b *testing.B) {
+func (serverTest *ServerTest_b) ExampleSuccessSend(in int) {
+	_ = in
+}
+
+func (serverTest *ServerTest_b) ExampleSuccessAsynCall(in int, out *int) error {
+	*out = in
+	return nil
+}
+
+func Benchmark_ExampleSuccessCall(b *testing.B) {
 	log.SetLevel(log.Lnone)
 	serverTest := NewServerTest_b()
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		err := serverTest.ExampleSuccess(in, &out)
+		err := serverTest.ExampleSuccessCall(in, &out)
 		if err != nil {
 			b.Error()
 		}
@@ -46,7 +55,16 @@ func Benchmark_ExampleSuccess(b *testing.B) {
 	}
 }
 
-func Benchmark_ExampleSuccess_call(b *testing.B) {
+func Benchmark_ExampleSuccessSend(b *testing.B) {
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
+	for i := 0; i < b.N; i++ {
+		in := 1
+		serverTest.ExampleSuccessSend(in)
+	}
+}
+
+func Benchmark_ExampleSuccessCall_rpc(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	serverTest := NewServerTest_b()
@@ -54,7 +72,7 @@ func Benchmark_ExampleSuccess_call(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		err := server.Call("ExampleSuccess", in, &out)
+		err := server.Call("ExampleSuccessCall", in, &out)
 		if err != nil {
 			b.Error()
 		}
@@ -65,15 +83,34 @@ func Benchmark_ExampleSuccess_call(b *testing.B) {
 	server.Stop()
 }
 
-func Benchmark_ExampleSuccess_Send(b *testing.B) {
+func Benchmark_ExampleSuccessSend_rpc(b *testing.B) {
 	b.ReportAllocs()
 	log.SetLevel(log.Lnone)
 	serverTest := NewServerTest_b()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
+		server.Send("ExampleSuccessSend", in)
+	}
+	server.Stop()
+}
+
+func Benchmark_ExampleSuccessAsynCall_rpc(b *testing.B) {
+	b.ReportAllocs()
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
+	server := NewServer(1, 1, serverTest)
+	for i := 0; i < b.N; i++ {
+		in := 1
 		out := 0
-		err := server.Send("ExampleSuccess", in, &out)
+		err := server.asynCall("ExampleSuccessAsynCall", in, &out, func(retErr error) {
+			if retErr != nil {
+				b.Error()
+			}
+			if in != out {
+				b.Error()
+			}
+		})
 		if err != nil {
 			b.Error()
 		}
