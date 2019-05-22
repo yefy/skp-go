@@ -3,7 +3,10 @@ package rpc
 import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/rpc_proto"
 	"testing"
+
+	protobuf "github.com/golang/protobuf/proto"
 )
 
 type ServerTest struct {
@@ -46,6 +49,34 @@ func (serverTest *ServerTest) ExampleFailedSend(in int) {
 func (serverTest *ServerTest) ExampleSuccessAsynCall(in int, out *int) error {
 	*out = in
 	return nil
+}
+
+func (serverTest *ServerTest) ExampleSuccessProroCall(in *rpc_proto.Person, out *rpc_proto.Person) error {
+	log.Fatal("in = %+v", in)
+	out.Name = protobuf.String(in.GetName())
+	out.Age = protobuf.Int32(in.GetAge())
+	out.Email = protobuf.String(in.GetEmail())
+
+	return nil
+}
+
+func Test_ExampleSuccessProroCall_rpc(t *testing.T) {
+	log.SetLevel(log.Lall)
+	serverTest := NewServerTest()
+	server := NewServer(1, 1, serverTest)
+
+	in := &rpc_proto.Person{
+		Name:  protobuf.String("111"),
+		Age:   protobuf.Int32(222),
+		Email: protobuf.String("333"),
+	}
+	out := rpc_proto.Person{}
+	err := server.Call("ExampleSuccessProroCall", in, &out)
+	if err != nil {
+		t.Error()
+	}
+	log.Fatal("out = %+v", &out)
+	server.Stop()
 }
 
 func Test_ExampleSuccessCall(t *testing.T) {

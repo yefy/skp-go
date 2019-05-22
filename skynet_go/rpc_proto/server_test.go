@@ -1,9 +1,8 @@
-package rpc_gob
+package rpc_proto
 
 import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/rpc_proto"
 	"testing"
 
 	protobuf "github.com/golang/protobuf/proto"
@@ -39,7 +38,8 @@ func (serverTest *ServerTest) ExampleFailedCall(in int, out *int) error {
 
 }
 
-func (serverTest *ServerTest) ExampleSuccessSend(in int) {
+func (serverTest *ServerTest) ExampleSuccessSend(p *Person) {
+	log.Fatal("%+v", p)
 }
 
 func (serverTest *ServerTest) ExampleFailedSend(in int) {
@@ -51,36 +51,37 @@ func (serverTest *ServerTest) ExampleSuccessAsynCall(in int, out *int) error {
 	return nil
 }
 
-func (serverTest *ServerTest) ExampleSuccessProroCall(in *rpc_proto.Person, out *rpc_proto.Person) error {
-	log.Fatal("in = %+v", in)
-	out.Name = protobuf.String(in.GetName())
-	out.Age = protobuf.Int32(in.GetAge())
-	out.Email = protobuf.String(in.GetEmail())
-
-	return nil
-}
-
-func Test_ExampleSuccessProroCall_rpc(t *testing.T) {
+func Test_ExampleSuccessSend(t *testing.T) {
 	log.SetLevel(log.Lall)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := &rpc_proto.Person{
+	msg := &Person{
 		Name:  protobuf.String("111"),
 		Age:   protobuf.Int32(222),
 		Email: protobuf.String("333"),
 	}
-	out := rpc_proto.Person{}
-	err := server.Call("ExampleSuccessProroCall", in, &out)
+	serverTest.ExampleSuccessSend(msg)
+}
+
+func Test_ExampleSuccessSend_rpc(t *testing.T) {
+	log.SetLevel(log.Lall)
+	serverTest := NewServerTest()
+	server := NewServer(1, 1, serverTest)
+
+	in := &Person{
+		Name:  protobuf.String("111"),
+		Age:   protobuf.Int32(222),
+		Email: protobuf.String("333"),
+	}
+	err := server.Send("ExampleSuccessSend", in)
 	if err != nil {
 		t.Error()
 	}
-	log.Fatal("out = %+v", &out)
 	server.Stop()
 }
 
+/*
 func Test_ExampleSuccessCall(t *testing.T) {
-	log.SetLevel(log.Lnone)
+	log.SetLevel(log.Lall)
 	serverTest := NewServerTest()
 	in := 1
 	out := 0
@@ -93,6 +94,7 @@ func Test_ExampleSuccessCall(t *testing.T) {
 		t.Error()
 	}
 }
+
 
 func Test_ExampleFailedCall(t *testing.T) {
 	log.SetLevel(log.Lnone)
@@ -226,7 +228,7 @@ func Test_ExampleSuccessCall_ExampleFailedCall_rpc(t *testing.T) {
 	server.Stop()
 }
 
-/****************************************************************/
+//====================================================
 
 func Test_ExampleSuccessSend(t *testing.T) {
 	log.SetLevel(log.Lnone)
@@ -347,7 +349,7 @@ func Test_ExampleSuccessAsynCall_rpc(t *testing.T) {
 	}
 	server.Stop()
 }
-
+*/
 //go test
 
 //测试所有的文件 go test，将对当前目录下的所有*_test.go文件进行编译并自动运行测试。

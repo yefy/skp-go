@@ -15,6 +15,7 @@ type GobTest struct {
 	StrP2 *string
 	Byte1 []byte
 	Map1  map[int]string
+	MapP1 *map[int]string
 }
 
 func (g *GobTest) GetN1() int {
@@ -39,6 +40,7 @@ func main() {
 	*inGTest.StrP2 = "StrP2"
 	inGTest.Byte1 = []byte{'1', '2', '3', '4'}
 	inGTest.Map1 = map[int]string{1: "111", 2: "222"}
+	inGTest.MapP1 = &map[int]string{1: "111aaa", 2: "222bbb"}
 
 	// Note: pointer to the interface
 	err := enc.Encode(&inGTest)
@@ -65,7 +67,9 @@ func main() {
 	for k, v := range outGTest.Map1 {
 		log.Fatal("k = %+v, v = %+v", k, v)
 	}
+	for k, v := range *outGTest.MapP1 {
+		log.Fatal("k = %+v, v = %+v", k, v)
+	}
 
-	b := []byte{'1', '2', '3', '4'}
-	log.Fatal("b = %+v", string(b))
+	log.Fatal("outGTest = %+v", outGTest)
 }

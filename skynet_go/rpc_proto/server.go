@@ -1,4 +1,4 @@
-package rpc_gob
+package rpc_proto
 
 import (
 	"bytes"
@@ -10,7 +10,11 @@ import (
 	_ "skp-go/skynet_go/utility"
 	"sync"
 	"sync/atomic"
+
+	protobuf "github.com/golang/protobuf/proto"
 )
+
+//protoc.exe --plugin=protoc-gen-go=D:\yefy\ubuntu-share\go\bin\protoc-gen-go.exe --go_out=./ server_test.proto
 
 var isTest bool = false
 
@@ -194,8 +198,8 @@ func (server *Server) callBack(msg *Msg) {
 			case reflect.Slice:
 				replyv.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
 			}
-			//retValues := objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface()), reflect.ValueOf(replyv.Interface())})
-			retValues := objMethod.method.Func.Call([]reflect.Value{server.objValue, args, replyv})
+
+			retValues := objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface()), reflect.ValueOf(replyv.Interface())})
 			msg.err = retValues[0].Interface()
 
 			var bufOut bytes.Buffer
@@ -222,17 +226,20 @@ func (server *Server) callBack(msg *Msg) {
 				args = reflect.New(objMethod.argType)
 				argIsValue = true
 			}
-			var buf bytes.Buffer
-			buf.WriteString(msg.argsStr)
-			dec := gob.NewDecoder(&buf)
-			dec.Decode(args.Interface())
+			argsInter := args.Interface()
+			protobuf.Unmarshal([]byte(msg.argsStr), argsInter.(protobuf.Message))
+
+			// var buf bytes.Buffer
+			// buf.WriteString(msg.argsStr)
+			// dec := gob.NewDecoder(&buf)
+			// dec.Decode(args.Interface())
 			//buf := bytes.NewBufferString()
 			// argv guaranteed to be a pointer now.
 			if argIsValue {
 				args = args.Elem()
 			}
-			objMethod.method.Func.Call([]reflect.Value{server.objValue, args})
-			//objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface())})
+
+			objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface())})
 
 		}()
 		server.msgPool.Put(msg)
@@ -273,8 +280,8 @@ func (server *Server) callBack(msg *Msg) {
 			case reflect.Slice:
 				replyv.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
 			}
-			//retValues = objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface()), reflect.ValueOf(replyv.Interface())})
-			retValues = objMethod.method.Func.Call([]reflect.Value{server.objValue, args, replyv})
+
+			retValues = objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(args.Interface()), reflect.ValueOf(replyv.Interface())})
 			var bufOut bytes.Buffer
 			enc := gob.NewEncoder(&bufOut)
 			enc.Encode(replyv.Interface())
@@ -360,15 +367,13 @@ func (server *Server) Send(method string, args interface{}) error {
 		return err
 	}
 
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	enc.Encode(args)
+	buf, _ := protobuf.Marshal(args.(protobuf.Message))
 
 	msg := server.msgPool.Get().(*Msg)
 	msg.typ = "send"
 	msg.method = method
 	msg.args = args
-	msg.argsStr = buf.String()
+	msg.argsStr = string(buf)
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
