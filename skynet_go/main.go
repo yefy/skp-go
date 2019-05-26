@@ -3,8 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
+	"reflect"
 	log "skp-go/skynet_go/logger"
 )
+
+var _ = fmt.Errorf
+var _ = reflect.Bool
 
 type GobTest struct {
 	N1    int

@@ -1,4 +1,4 @@
-package rpc
+package rpc2
 
 import (
 	log "skp-go/skynet_go/logger"

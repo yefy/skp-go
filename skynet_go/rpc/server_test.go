@@ -3,297 +3,107 @@ package rpc
 import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/rpc_proto"
 	"testing"
-
-	protobuf "github.com/golang/protobuf/proto"
 )
 
+var _ = errorCode.NewErrCode
+
 type ServerTest struct {
-	data int
+	n1    int
+	n2    int
+	str1  string
+	str2  string
+	pn1   *int
+	pn2   *int
+	pstr1 *string
+	pstr2 *string
 }
 
-var errExampleFailed error = errorCode.NewErrCode(0, "ExampleFailed")
+func (s *ServerTest) compare(c *ServerTest) bool {
+	if s.n1 != c.n1 ||
+		s.n2 != c.n2 ||
+		s.str1 != c.str1 ||
+		s.str2 != c.str2 ||
+		*s.pn1 != *c.pn1 ||
+		*s.pn2 != *c.pn2 ||
+		*s.pstr1 != *c.pstr1 ||
+		*s.pstr2 != *c.pstr2 {
+		return false
+
+	}
+	return true
+}
+
+func (s *ServerTest) clone() *ServerTest {
+	server := &ServerTest{}
+	server.n1 = s.n1
+	server.n2 = s.n2
+	server.str1 = s.str1
+	server.str2 = s.str2
+
+	server.pn1 = new(int)
+	server.pn2 = new(int)
+	server.pstr1 = new(string)
+	server.pstr2 = new(string)
+
+	*server.pn1 = *s.pn1
+	*server.pn2 = *s.pn2
+	*server.pstr1 = *s.pstr1
+	*server.pstr2 = *s.pstr2
+	return server
+}
+
+func (s *ServerTest) data() *ServerTest {
+	server := &ServerTest{}
+	server.n1 = 1
+	server.n2 = 2
+	server.str1 = "str1"
+	server.str2 = "str2"
+
+	server.pn1 = new(int)
+	server.pn2 = new(int)
+	server.pstr1 = new(string)
+	server.pstr2 = new(string)
+
+	*server.pn1 = 11
+	*server.pn2 = 22
+	*server.pstr1 = "pstr1"
+	*server.pstr2 = "pstr2"
+	return server
+}
 
 func NewServerTest() *ServerTest {
 	serverTest := &ServerTest{}
 	return serverTest
 }
-func (serverTest *ServerTest) ExampleSuccessCall(in int, out *int) error {
-	*out = in
-	if serverTest.data != in {
-		return log.Panic(errorCode.NewErrCode(0, "data:%+v != in:%+v", serverTest.data, in))
-	}
-	//log.Debug("in = %+v, out = %+v, data = %+v \n", in, *out, serverTest.data)
-	return nil
+
+func (serverTest *ServerTest) ExampleTest(in *ServerTest, out *ServerTest) (*ServerTest, error) {
+	log.All("in = %+v", in)
+	*out = *in.clone()
+	//return out, errorCode.NewErrCode(0, "ExampleTest")
+	return out, nil
 }
 
-func (serverTest *ServerTest) ExampleFailedCall(in int, out *int) error {
-	*out = in
-	if serverTest.data != in {
-		return log.Panic(errorCode.NewErrCode(0, "data:%+v != in:%+v", serverTest.data, in))
-	}
-	//log.Debug("in = %+v, out = %+v, data = %+v \n", in, *out, serverTest.data)
-	//return errExampleFailed
-	return log.Panic(errorCode.NewErrCode(0, "ExampleFailed"))
-
+func (serverTest *ServerTest) ExampleTestError(in *ServerTest, out *ServerTest) error {
+	log.All("in = %+v", in)
+	*out = *in.clone()
+	//return out
+	return errorCode.NewErrCode(0, "ExampleTest")
 }
 
-func (serverTest *ServerTest) ExampleSuccessSend(in int) {
+func (serverTest *ServerTest) ExamplePerf(in *int, out *int) (*int, *int) {
+	*out = *in
+	return in, out
 }
 
-func (serverTest *ServerTest) ExampleFailedSend(in int) {
-	log.Panic(errorCode.NewErrCode(0, "ExampleFailed"))
-}
-
-func (serverTest *ServerTest) ExampleSuccessAsynCall(in int, out *int) error {
-	*out = in
-	return nil
-}
-
-func (serverTest *ServerTest) ExampleSuccessProroCall(in *rpc_proto.Person, out *rpc_proto.Person) error {
-	log.Fatal("in = %+v", in)
-	out.Name = protobuf.String(in.GetName())
-	out.Age = protobuf.Int32(in.GetAge())
-	out.Email = protobuf.String(in.GetEmail())
-
-	return nil
-}
-
-func Test_ExampleSuccessProroCall_rpc(t *testing.T) {
-	log.SetLevel(log.Lall)
+func Test_ExampleTest_Send(t *testing.T) {
+	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
+	server := NewServer(serverTest)
 
-	in := &rpc_proto.Person{
-		Name:  protobuf.String("111"),
-		Age:   protobuf.Int32(222),
-		Email: protobuf.String("333"),
-	}
-	out := rpc_proto.Person{}
-	err := server.Call("ExampleSuccessProroCall", in, &out)
-	if err != nil {
-		t.Error()
-	}
-	log.Fatal("out = %+v", &out)
-	server.Stop()
-}
-
-func Test_ExampleSuccessCall(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	in := 1
-	out := 0
-	serverTest.data = in
-	err := serverTest.ExampleSuccessCall(in, &out)
-	if err != nil {
-		t.Error()
-	}
-	if in != out {
-		t.Error()
-	}
-}
-
-func Test_ExampleFailedCall(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	in := 2
-	out := 0
-	serverTest.data = in
-	func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Err("%+v", err)
-			}
-		}()
-		err := serverTest.ExampleFailedCall(in, &out)
-		if in != out {
-			t.Error()
-		}
-		if err == nil {
-			t.Error()
-		}
-		log.Err(err.Error())
-	}()
-
-}
-
-func Test_ExampleSuccessCall_ExampleFailedCall(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	if true {
-		in := 1
-		out := 0
-		serverTest.data = in
-		err := serverTest.ExampleSuccessCall(in, &out)
-		if err != nil {
-			t.Error()
-		}
-		if in != out {
-			t.Error()
-		}
-	}
-	if true {
-		in := 2
-		out := 0
-		serverTest.data = in
-		func() {
-			defer func() {
-				if err := recover(); err != nil {
-					log.Err("%+v", err)
-				}
-			}()
-			err := serverTest.ExampleFailedCall(in, &out)
-			if in != out {
-				t.Error()
-			}
-			if err == nil {
-				t.Error()
-			}
-
-			log.Fatal(err.Error())
-		}()
-
-	}
-}
-
-func Test_ExampleSuccessCall_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := 1
-	out := 0
-	serverTest.data = in
-	err := server.Call("ExampleSuccessCall", in, &out)
-	if err != nil {
-		t.Error()
-	}
-	if in != out {
-		t.Error()
-	}
-	server.Stop()
-}
-
-func Test_ExampleFailedCall_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := 2
-	out := 0
-	serverTest.data = in
-	err := server.Call("ExampleFailedCall", in, &out)
-	if in != out {
-		t.Error()
-	}
-	if err == nil {
-		t.Error()
-	}
-	log.Fatal(err.Error())
-	server.Stop()
-}
-
-func Test_ExampleSuccessCall_ExampleFailedCall_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-	if true {
-		in := 1
-		out := 0
-		serverTest.data = in
-		err := server.Call("ExampleSuccessCall", in, &out)
-		if err != nil {
-			t.Error()
-		}
-		if in != out {
-			t.Error()
-		}
-	}
-	if true {
-		in := 2
-		out := 0
-		serverTest.data = in
-		err := server.Call("ExampleFailedCall", in, &out)
-		if in != out {
-			t.Error()
-		}
-		if err == nil {
-			t.Error()
-		}
-		log.Fatal(err.Error())
-	}
-	server.Stop()
-}
-
-/****************************************************************/
-
-func Test_ExampleSuccessSend(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	in := 1
-	serverTest.data = in
-	serverTest.ExampleSuccessSend(in)
-}
-
-func Test_ExampleFailedSend(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	in := 2
-	serverTest.data = in
-	func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Err("%+v", err)
-			}
-		}()
-		serverTest.ExampleFailedSend(in)
-	}()
-}
-
-func Test_ExampleSuccessSend_ExampleFailedSend(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	if true {
-		in := 1
-		serverTest.data = in
-		serverTest.ExampleSuccessSend(in)
-
-	}
-	if true {
-		in := 2
-		func() {
-			defer func() {
-				if err := recover(); err != nil {
-					log.Err("%+v", err)
-				}
-			}()
-			serverTest.ExampleFailedSend(in)
-		}()
-	}
-}
-
-func Test_ExampleSuccessSend_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := 1
-	err := server.Send("ExampleSuccessSend", in)
-	if err != nil {
-		t.Error()
-	}
-	server.Stop()
-}
-
-func Test_ExampleFailedSend_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := 2
-	err := server.Send("ExampleFailedSend", in)
-
+	in := serverTest.data()
+	out := ServerTest{}
+	err := server.Send("ExampleTest", in, &out)
 	if err != nil {
 		t.Error()
 	}
@@ -301,49 +111,99 @@ func Test_ExampleFailedSend_rpc(t *testing.T) {
 	server.Stop()
 }
 
-func Test_ExampleSuccessSend_ExampleFailedSend_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
+func Test_ExampleTest_SendReq(t *testing.T) {
+	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-	if true {
-		in := 1
-		serverTest.data = in
-		err := server.Send("ExampleSuccessSend", in)
-		if err != nil {
-			t.Error()
-		}
-	}
-	if true {
-		in := 2
-		err := server.Send("ExampleFailedSend", in)
+	server := NewServer(serverTest)
 
-		if err != nil {
+	in := serverTest.data()
+	out := ServerTest{}
+
+	err := server.SendReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
+		if in.compare(&out) == false {
 			t.Error()
 		}
 
-	}
-	server.Stop()
-}
-
-func Test_ExampleSuccessAsynCall_rpc(t *testing.T) {
-	log.SetLevel(log.Lnone)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1, serverTest)
-
-	in := 1
-	out := 0
-	err := server.asynCall("ExampleSuccessAsynCall", in, &out, func(retErr error) {
-		if retErr != nil {
+		if in.compare(resServer) == false {
 			t.Error()
 		}
 
-		if in != out {
+		if resErr != nil {
 			t.Error()
 		}
+
 	})
 	if err != nil {
 		t.Error()
 	}
+
+	server.Stop()
+}
+
+func Test_ExampleTest_Call(t *testing.T) {
+	log.SetLevel(log.Lerr)
+	serverTest := NewServerTest()
+	server := NewServer(serverTest)
+
+	in := serverTest.data()
+	out := ServerTest{}
+	err := server.Call("ExampleTest", in, &out)
+	if err != nil {
+		t.Error()
+	}
+
+	if in.compare(&out) == false {
+		t.Error()
+	}
+
+	server.Stop()
+}
+
+func Test_ExampleTestError_Call(t *testing.T) {
+	log.SetLevel(log.Lerr)
+	serverTest := NewServerTest()
+	server := NewServer(serverTest)
+
+	in := serverTest.data()
+	out := ServerTest{}
+	err := server.Call("ExampleTestError", in, &out)
+	if err == nil {
+		t.Error()
+	}
+
+	if in.compare(&out) == false {
+		t.Error()
+	}
+
+	server.Stop()
+}
+
+func Test_ExampleTest_CallReq(t *testing.T) {
+	log.SetLevel(log.Lerr)
+	serverTest := NewServerTest()
+	server := NewServer(serverTest)
+
+	in := serverTest.data()
+	out := ServerTest{}
+
+	err := server.CallReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
+		if in.compare(&out) == false {
+			t.Error()
+		}
+
+		if in.compare(resServer) == false {
+			t.Error()
+		}
+
+		if resErr != nil {
+			t.Error()
+		}
+
+	})
+	if err != nil {
+		t.Error()
+	}
+
 	server.Stop()
 }
 

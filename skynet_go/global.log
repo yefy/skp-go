@@ -226,3 +226,73 @@
 2019/05/22 18:07:14.366883 | main.go:71 | main.main | 1 | fatal | k = 1, v = 111aaa
 2019/05/22 18:07:14.366883 | main.go:71 | main.main | 1 | fatal | k = 2, v = 222bbb
 2019/05/22 18:07:14.366883 | main.go:74 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc0000375f0 StrP2:0xc000037600 Byte1:[49 50 51 52] Map1:map[1:111 2:222] MapP1:0xc000006800}
+2019/05/22 21:56:29.857105 | main.go:27 | main.main | 1 |   all | main start
+2019/05/22 21:56:29.874026 | main.go:59 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/22 21:56:29.874026 | main.go:60 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/22 21:56:29.874026 | main.go:61 | main.main | 1 | fatal | outGTest.N2 = 2
+2019/05/22 21:56:29.874026 | main.go:62 | main.main | 1 | fatal | outGTest.Str1 = 111
+2019/05/22 21:56:29.874026 | main.go:63 | main.main | 1 | fatal | outGTest.Str2 = 222
+2019/05/22 21:56:29.874026 | main.go:64 | main.main | 1 | fatal | outGTest.StrP1 = StrP1
+2019/05/22 21:56:29.874026 | main.go:65 | main.main | 1 | fatal | outGTest.StrP2 = StrP2
+2019/05/22 21:56:29.874026 | main.go:66 | main.main | 1 | fatal | outGTest.Byte1 = 1234
+2019/05/22 21:56:29.874026 | main.go:68 | main.main | 1 | fatal | k = 1, v = 111
+2019/05/22 21:56:29.874026 | main.go:68 | main.main | 1 | fatal | k = 2, v = 222
+2019/05/22 21:56:29.874026 | main.go:71 | main.main | 1 | fatal | k = 1, v = 111aaa
+2019/05/22 21:56:29.874026 | main.go:71 | main.main | 1 | fatal | k = 2, v = 222bbb
+2019/05/22 21:56:29.874026 | main.go:74 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042043550 StrP2:0xc042043560 Byte1:[49 50 51 52] Map1:map[1:111 2:222] MapP1:0xc0420767b0}
+2019/05/22 21:59:38.495331 | main.go:27 | main.main | 1 |   all | main start
+2019/05/22 21:59:38.511262 | main.go:59 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/22 21:59:38.511262 | main.go:60 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/22 21:59:38.511262 | main.go:61 | main.main | 1 | fatal | outGTest.N2 = 2
+2019/05/22 21:59:38.511262 | main.go:62 | main.main | 1 | fatal | outGTest.Str1 = 111
+2019/05/22 21:59:38.511262 | main.go:63 | main.main | 1 | fatal | outGTest.Str2 = 222
+2019/05/22 21:59:38.511262 | main.go:64 | main.main | 1 | fatal | outGTest.StrP1 = StrP1
+2019/05/22 21:59:38.511262 | main.go:65 | main.main | 1 | fatal | outGTest.StrP2 = StrP2
+2019/05/22 21:59:38.511262 | main.go:66 | main.main | 1 | fatal | outGTest.Byte1 = 1234
+2019/05/22 21:59:38.511262 | main.go:68 | main.main | 1 | fatal | k = 1, v = 111
+2019/05/22 21:59:38.511262 | main.go:68 | main.main | 1 | fatal | k = 2, v = 222
+2019/05/22 21:59:38.511262 | main.go:71 | main.main | 1 | fatal | k = 1, v = 111aaa
+2019/05/22 21:59:38.511262 | main.go:71 | main.main | 1 | fatal | k = 2, v = 222bbb
+2019/05/22 21:59:38.511262 | main.go:74 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042043550 StrP2:0xc042043560 Byte1:[49 50 51 52] Map1:map[1:111 2:222] MapP1:0xc0420767b0}
+2019/05/25 16:44:56.952886 | main.go:33 | main.main | 1 |   all | main start
+2019/05/25 16:44:57.055795 | main.go:65 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/25 16:44:57.055795 | main.go:66 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/25 16:44:57.055795 | main.go:67 | main.main | 1 | fatal | outGTest.N2 = 2
+2019/05/25 16:44:57.055795 | main.go:68 | main.main | 1 | fatal | outGTest.Str1 = 111
+2019/05/25 16:44:57.055795 | main.go:69 | main.main | 1 | fatal | outGTest.Str2 = 222
+2019/05/25 16:44:57.055795 | main.go:70 | main.main | 1 | fatal | outGTest.StrP1 = StrP1
+2019/05/25 16:44:57.055795 | main.go:71 | main.main | 1 | fatal | outGTest.StrP2 = StrP2
+2019/05/25 16:44:57.055795 | main.go:72 | main.main | 1 | fatal | outGTest.Byte1 = 1234
+2019/05/25 16:44:57.055795 | main.go:74 | main.main | 1 | fatal | k = 1, v = 111
+2019/05/25 16:44:57.056435 | main.go:74 | main.main | 1 | fatal | k = 2, v = 222
+2019/05/25 16:44:57.056435 | main.go:77 | main.main | 1 | fatal | k = 1, v = 111aaa
+2019/05/25 16:44:57.056435 | main.go:77 | main.main | 1 | fatal | k = 2, v = 222bbb
+2019/05/25 16:44:57.056435 | main.go:80 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042035560 StrP2:0xc042035570 Byte1:[49 50 51 52] Map1:map[2:222 1:111] MapP1:0xc0420047c0}
+2019/05/25 22:35:15.194601 | main.go:32 | main.main | 1 |   all | main start
+2019/05/25 22:35:15.210552 | main.go:64 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/25 22:35:15.210552 | main.go:65 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/25 22:35:15.210552 | main.go:66 | main.main | 1 | fatal | outGTest.N2 = 2
+2019/05/25 22:35:15.210552 | main.go:67 | main.main | 1 | fatal | outGTest.Str1 = 111
+2019/05/25 22:35:15.210552 | main.go:68 | main.main | 1 | fatal | outGTest.Str2 = 222
+2019/05/25 22:35:15.210552 | main.go:69 | main.main | 1 | fatal | outGTest.StrP1 = StrP1
+2019/05/25 22:35:15.210552 | main.go:70 | main.main | 1 | fatal | outGTest.StrP2 = StrP2
+2019/05/25 22:35:15.210552 | main.go:71 | main.main | 1 | fatal | outGTest.Byte1 = 1234
+2019/05/25 22:35:15.210552 | main.go:73 | main.main | 1 | fatal | k = 1, v = 111
+2019/05/25 22:35:15.210552 | main.go:73 | main.main | 1 | fatal | k = 2, v = 222
+2019/05/25 22:35:15.210552 | main.go:76 | main.main | 1 | fatal | k = 1, v = 111aaa
+2019/05/25 22:35:15.210552 | main.go:76 | main.main | 1 | fatal | k = 2, v = 222bbb
+2019/05/25 22:35:15.210552 | main.go:79 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042043550 StrP2:0xc042043560 Byte1:[49 50 51 52] Map1:map[1:111 2:222] MapP1:0xc0420767b0}
+2019/05/26 22:31:33.515529 | main.go:32 | main.main | 1 |   all | main start
+2019/05/26 22:31:33.552363 | main.go:64 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/26 22:31:33.552363 | main.go:65 | main.main | 1 | fatal | outGTest.N1 = 1
+2019/05/26 22:31:33.552363 | main.go:66 | main.main | 1 | fatal | outGTest.N2 = 2
+2019/05/26 22:31:33.552363 | main.go:67 | main.main | 1 | fatal | outGTest.Str1 = 111
+2019/05/26 22:31:33.552363 | main.go:68 | main.main | 1 | fatal | outGTest.Str2 = 222
+2019/05/26 22:31:33.552363 | main.go:69 | main.main | 1 | fatal | outGTest.StrP1 = StrP1
+2019/05/26 22:31:33.552363 | main.go:70 | main.main | 1 | fatal | outGTest.StrP2 = StrP2
+2019/05/26 22:31:33.552363 | main.go:71 | main.main | 1 | fatal | outGTest.Byte1 = 1234
+2019/05/26 22:31:33.552363 | main.go:73 | main.main | 1 | fatal | k = 1, v = 111
+2019/05/26 22:31:33.552363 | main.go:73 | main.main | 1 | fatal | k = 2, v = 222
+2019/05/26 22:31:33.552363 | main.go:76 | main.main | 1 | fatal | k = 1, v = 111aaa
+2019/05/26 22:31:33.552363 | main.go:76 | main.main | 1 | fatal | k = 2, v = 222bbb
+2019/05/26 22:31:33.552363 | main.go:79 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042035560 StrP2:0xc042035570 Byte1:[49 50 51 52] Map1:map[2:222 1:111] MapP1:0xc0420047c0}

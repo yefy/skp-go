@@ -1,4 +1,4 @@
-package rpc
+package rpc2
 
 import (
 	log "skp-go/skynet_go/logger"
@@ -18,100 +18,113 @@ import (
 //go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -memprofile  profile_mem.out
 //go tool pprof -pdf profile_mem.out > profile_mem.pdf
 
-func Benchmark_ExampleTest_Send(b *testing.B) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+type ServerTest_b struct {
+}
+
+func NewServerTest_b() *ServerTest_b {
+	serverTest := &ServerTest_b{}
+	return serverTest
+}
+func (serverTest *ServerTest_b) ExampleSuccessCall(in int, out *int) error {
+	*out = in
+	return nil
+}
+
+func (serverTest *ServerTest_b) ExampleSuccessSend(in int) {
+	_ = in
+}
+
+func (serverTest *ServerTest_b) ExampleSuccessAsynCall(in int, out *int) error {
+	*out = in
+	return nil
+}
+
+func Benchmark_ExampleSuccessCall(b *testing.B) {
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
-		err := server.Send("ExampleTest", in, &out)
+		in := 1
+		out := 0
+		err := serverTest.ExampleSuccessCall(in, &out)
 		if err != nil {
 			b.Error()
 		}
+		if in != out {
+			b.Error()
+		}
 	}
+}
 
+func Benchmark_ExampleSuccessSend(b *testing.B) {
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
+	for i := 0; i < b.N; i++ {
+		in := 1
+		serverTest.ExampleSuccessSend(in)
+	}
+}
+
+func Benchmark_ExampleSuccessCall_rpc(b *testing.B) {
+	b.ReportAllocs()
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
+	server := NewServer(1, 1, serverTest)
+	for i := 0; i < b.N; i++ {
+		in := 1
+		out := 0
+		err := server.Call("ExampleSuccessCall", in, &out)
+		if err != nil {
+			b.Error()
+		}
+		if in != out {
+			b.Error()
+		}
+	}
 	server.Stop()
 }
 
-func Benchmark_ExampleTest_SendReq(b *testing.B) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
+func Benchmark_ExampleSuccessSend_rpc(b *testing.B) {
+	b.ReportAllocs()
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
+		in := 1
+		server.Send("ExampleSuccessSend", in)
+	}
+	server.Stop()
+}
 
-		err := server.SendReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
-			if in.compare(&out) == false {
+func Benchmark_ExampleSuccessAsynCall_rpc(b *testing.B) {
+	b.ReportAllocs()
+	log.SetLevel(log.Lnone)
+	serverTest := NewServerTest_b()
+	server := NewServer(1, 1, serverTest)
+	for i := 0; i < b.N; i++ {
+		in := 1
+		out := 0
+		err := server.asynCall("ExampleSuccessAsynCall", in, &out, func(retErr error) {
+			if retErr != nil {
 				b.Error()
 			}
-
-			if in.compare(resServer) == false {
+			if in != out {
 				b.Error()
 			}
-
-			if resErr != nil {
-				b.Error()
-			}
-
 		})
 		if err != nil {
 			b.Error()
 		}
 	}
-
 	server.Stop()
 }
 
-func Benchmark_ExampleTest_Call(b *testing.B) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
-	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
-		err := server.Call("ExampleTest", in, &out)
-		if err != nil {
-			b.Error()
-		}
-
-		if in.compare(&out) == false {
-			b.Error()
-		}
-	}
-	server.Stop()
-}
-
-func Benchmark_ExampleTest_CallReq(b *testing.B) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
-	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
-
-		err := server.CallReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
-			if in.compare(&out) == false {
-				b.Error()
-			}
-
-			if in.compare(resServer) == false {
-				b.Error()
-			}
-
-			if resErr != nil {
-				b.Error()
-			}
-
-		})
-		if err != nil {
-			b.Error()
-		}
-	}
-
-	server.Stop()
-}
+// goos: windows
+// goarch: amd64
+// Benchmark_Test-4                20000000                59.1 ns/op
+// Benchmark_Test_rpc_call-4        1000000              2250 ns/op
+// Benchmark_Test_rpc_Send-4        2000000               994 ns/op
+// PASS
+// ok      command-line-arguments  6.673s
 
 //go test
 

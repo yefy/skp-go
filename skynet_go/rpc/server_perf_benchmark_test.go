@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-//go test -test.bench=. server_benchmark_test.go server.go
+//go test -test.bench=. server_perf_benchmark_test.go server_test.go server.go
 //go test -run=xxx -bench=. -benchtime="3s" -cpuprofile profile_cpu.out
 //go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -cpuprofile profile_cpu.out
 //go tool pprof app.test profile_cpu.out
@@ -13,19 +13,19 @@ import (
 //go tool pprof -svg profile_cpu.out > profile_cpu.svg
 //go tool pprof -pdf profile_cpu.out > profile_cpu.pdf
 
-//go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -cpuprofile profile_cpu.out
+//go test -run=xxx -bench=Benchmark_ExamplePerf_Send$ server_perf_benchmark_test.go server_test.go server.go -benchtime="3s" -cpuprofile profile_cpu.out
 //go tool pprof -pdf profile_cpu.out > profile_cpu.pdf
-//go test -run=xxx -bench=Benchmark_Test_rpc_Send$ server_benchmark_test.go server.go -benchtime="3s" -memprofile  profile_mem.out
+//go test -run=xxx -bench=Benchmark_ExamplePerf_Send$ server_perf_benchmark_test.go server_test.go server.go -benchtime="3s" -memprofile  profile_mem.out
 //go tool pprof -pdf profile_mem.out > profile_mem.pdf
 
-func Benchmark_ExampleTest_Send(b *testing.B) {
+func Benchmark_ExamplePerf_Send(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
-		err := server.Send("ExampleTest", in, &out)
+		in := 1
+		out := 0
+		err := server.Send("ExamplePerf", &in, &out)
 		if err != nil {
 			b.Error()
 		}
@@ -34,24 +34,24 @@ func Benchmark_ExampleTest_Send(b *testing.B) {
 	server.Stop()
 }
 
-func Benchmark_ExampleTest_SendReq(b *testing.B) {
+func Benchmark_ExamplePerf_SendReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
+		in := 1
+		out := 0
 
-		err := server.SendReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
-			if in.compare(&out) == false {
+		err := server.SendReq("ExamplePerf", &in, &out, func(res1 *int, res2 *int) {
+			if in != out {
 				b.Error()
 			}
 
-			if in.compare(resServer) == false {
+			if in != *res1 {
 				b.Error()
 			}
 
-			if resErr != nil {
+			if out != *res2 {
 				b.Error()
 			}
 
@@ -64,43 +64,43 @@ func Benchmark_ExampleTest_SendReq(b *testing.B) {
 	server.Stop()
 }
 
-func Benchmark_ExampleTest_Call(b *testing.B) {
+func Benchmark_ExamplePerf_Call(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
-		err := server.Call("ExampleTest", in, &out)
+		in := 1
+		out := 0
+		err := server.Call("ExamplePerf", &in, &out)
 		if err != nil {
 			b.Error()
 		}
 
-		if in.compare(&out) == false {
+		if in != out {
 			b.Error()
 		}
 	}
 	server.Stop()
 }
 
-func Benchmark_ExampleTest_CallReq(b *testing.B) {
+func Benchmark_ExamplePerf_CallReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
 	server := NewServer(1, 1000, serverTest)
 	for i := 0; i < b.N; i++ {
-		in := serverTest.data()
-		out := ServerTest{}
+		in := 1
+		out := 0
 
-		err := server.CallReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
-			if in.compare(&out) == false {
+		err := server.CallReq("ExamplePerf", &in, &out, func(res1 *int, res2 *int) {
+			if in != out {
 				b.Error()
 			}
 
-			if in.compare(resServer) == false {
+			if in != *res1 {
 				b.Error()
 			}
 
-			if resErr != nil {
+			if out != *res2 {
 				b.Error()
 			}
 

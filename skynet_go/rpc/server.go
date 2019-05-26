@@ -5,25 +5,36 @@ import (
 	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	_ "skp-go/skynet_go/utility"
 	"sync"
 	"sync/atomic"
 )
 
-var isTest bool = false
+var isTest bool = true
 
 func SetTest(b bool) {
 	isTest = b
 }
 
+const (
+	typCall    = "Call"
+	typCallReq = "CallReq"
+	typSend    = "Send"
+	typSendReq = "SendReq"
+)
+
 type Msg struct {
-	typ       string //call send
-	method    string
-	args      interface{}
-	reply     interface{}
-	pending   chan interface{}
-	err       interface{}
-	replyFunc interface{}
+	typ     string
+	method  string
+	args    interface{}
+	reply   interface{}
+	pending chan interface{}
+	err     interface{}
+}
+
+func (m *Msg) init() {
+	m.typ = ""
+	m.method = ""
+	m.err = nil
 }
 
 type ObjMethod struct {
@@ -48,15 +59,15 @@ type Server struct {
 	objMethod   map[string]*ObjMethod
 	cacheNumber int
 	cache       chan interface{}
-	coNumber    int
+	coNumber    int32
 	waitGroup   *sync.WaitGroup
 	ctx         context.Context
 	cancel      context.CancelFunc
 	msgPool     *sync.Pool
-	//msgPool    *utility.SyncPool
-	sendNumber int32
-	recvNumber int32
-	done       int32
+	valuePools  []*sync.Pool
+	sendNumber  int32
+	recvNumber  int32
+	done        int32
 }
 
 func parseMethod(server *Server, obj interface{}) error {
@@ -70,54 +81,27 @@ func parseMethod(server *Server, obj interface{}) error {
 
 	for i := 0; i < server.objType.NumMethod(); i++ {
 		method := server.objType.Method(i)
+
 		objM := &ObjMethod{}
 		objM.method = method
 		objM.typ = method.Type
-		objM.name = method.Name // method.Func
+		objM.name = method.Name
 		objM.value = server.objValue.MethodByName(method.Name)
 		objM.argvIn = objM.value.Type().NumIn()
 		objM.argvOut = objM.value.Type().NumOut()
-		if objM.argvIn > 0 {
-			objM.argType = objM.typ.In(1)
-			objM.argName = objM.argType.Name()
-		}
-		if objM.argvIn > 1 {
-			objM.replyType = objM.typ.In(2)
-			if objM.replyType.Kind() != reflect.Ptr {
-				return log.Panic(errorCode.NewErrCode(0, "objM.replyType.Kind() != reflect.Ptr, name = %+v, method = %+v", server.objName, objM.name))
-			}
-
-			objM.replyName = objM.replyType.Elem().Name()
-		}
-
-		if objM.argvOut > 0 {
-			if objM.typ.Out(0).Name() != "error" {
-				return log.Panic(errorCode.NewErrCode(0, "objM.typ.Out(0).Name() != error, name = %+v, method = %+v", server.objName, objM.name))
-			}
-		}
-
-		if objM.argvIn > 2 {
-			return log.Panic(errorCode.NewErrCode(0, "objM.argvIn > 2, name = %+v, method = %+v", server.objName, objM.name))
-		}
-
-		if objM.argvOut > 1 {
-			return log.Panic(errorCode.NewErrCode(0, "objM.argvOut > 1, name = %+v, method = %+v", server.objName, objM.name))
-		}
 
 		server.objMethod[objM.name] = objM
-		//log.All("objM = %+v", objM)
 	}
 	return nil
 }
 
-func NewServer(coNumber int, cacheNumber int, obj interface{}) *Server {
-	//log.All("NewServer coNumber = %+v, cacheNumber = %+v", coNumber, cacheNumber)
+func NewServer(obj interface{}) *Server {
 	server := &Server{}
 	server.obj = obj
 	server.objMethod = make(map[string]*ObjMethod)
-	server.cacheNumber = cacheNumber
-	server.cache = make(chan interface{}, cacheNumber)
-	server.coNumber = coNumber
+	server.cacheNumber = 1000
+	server.cache = make(chan interface{}, server.cacheNumber)
+	server.coNumber = 0
 	server.sendNumber = 0
 	server.recvNumber = 0
 	server.done = 0
@@ -127,8 +111,6 @@ func NewServer(coNumber int, cacheNumber int, obj interface{}) *Server {
 		return nil
 	}
 
-	//log.All("server = %+v", server)
-
 	server.msgPool = &sync.Pool{New: func() interface{} {
 		msg := &Msg{}
 		msg.pending = make(chan interface{}, 1)
@@ -136,75 +118,128 @@ func NewServer(coNumber int, cacheNumber int, obj interface{}) *Server {
 	},
 	}
 
-	// server.msgPool = utility.NewSyncPool(func() interface{} {
-	// 	msg := &Msg{}
-	// 	msg.pending = make(chan interface{}, 1)
-	// 	return msg
-	// })
+	server.valuePools = make([]*sync.Pool, 8)
+	for i := 0; i < len(server.valuePools); i++ {
+		valueLen := i + 1
+		server.valuePools[i] = &sync.Pool{New: func() interface{} {
+			value := make([]reflect.Value, valueLen)
+			return value
+		},
+		}
+	}
 
 	server.waitGroup = &sync.WaitGroup{}
 	server.ctx, server.cancel = context.WithCancel(context.Background())
 
-	for i := 0; i < coNumber; i++ {
-		server.waitGroup.Add(1)
-		go server.start(i)
-	}
+	server.Addoroutine(10)
 	return server
+}
+
+func (server *Server) Addoroutine(num int) {
+	for i := 0; i < num; i++ {
+		atomic.AddInt32(&server.coNumber, 1)
+		server.waitGroup.Add(1)
+		cNum := server.coNumber
+		go server.start(cNum)
+	}
+}
+
+func (server *Server) IsStop() bool {
+	return atomic.LoadInt32(&server.done) == 1
 }
 
 func (server *Server) callBack(msg *Msg) {
 	objMethod := server.objMethod[msg.method]
-	if msg.typ == "call" {
+	args := msg.args.([]interface{})
+
+	if msg.typ == typSend {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Err("%+v", err)
-					msg.err = errorCode.NewErrCode(0, "%+v", err)
+					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
-			retValues := objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
-			msg.err = retValues[0].Interface()
+			valuePool := server.valuePools[len(args)]
+			argsValue := valuePool.Get().([]reflect.Value)
+			argsValue[0] = server.objValue
+			for i := 0; i < len(args); i++ {
+				argsValue[i+1] = reflect.ValueOf(args[i])
+			}
 
+			objMethod.method.Func.Call(argsValue)
+		}()
+		server.msgPool.Put(msg)
+	} else if msg.typ == typSendReq {
+		var replyValues []reflect.Value
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+				}
+			}()
+			valuePool := server.valuePools[len(args)-1]
+			argsValue := valuePool.Get().([]reflect.Value)
+			argsValue[0] = server.objValue
+			for i := 0; i < len(args)-1; i++ {
+				argsValue[i+1] = reflect.ValueOf(args[i])
+			}
+
+			replyValues = objMethod.method.Func.Call(argsValue)
+
+			replyFunc := args[len(args)-1]
+			replyFuncName := reflect.ValueOf(replyFunc)
+			replyFuncName.Call(replyValues)
+		}()
+
+		server.msgPool.Put(msg)
+	} else if msg.typ == typCall {
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					msg.err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+				}
+			}()
+
+			valuePool := server.valuePools[len(args)]
+			argsValue := valuePool.Get().([]reflect.Value)
+			argsValue[0] = server.objValue
+			for i := 0; i < len(args); i++ {
+				argsValue[i+1] = reflect.ValueOf(args[i])
+			}
+
+			replyValues := objMethod.method.Func.Call(argsValue)
+			msg.reply = replyValues
 		}()
 		msg.pending <- msg
-	} else if msg.typ == "send" {
+	} else if msg.typ == typCallReq {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Err("%+v", err)
+					msg.err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
-			objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args)})
 
-		}()
-		server.msgPool.Put(msg)
-	} else if msg.typ == "asynCall" {
-		var retValues []reflect.Value
-		func() {
-			defer func() {
-				if err := recover(); err != nil {
-					log.Err("%+v", err)
-					retValues = []reflect.Value{reflect.ValueOf(errorCode.NewErrCode(0, "%+v", err))}
-				}
-			}()
-			retValues = objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
+			valuePool := server.valuePools[len(args)-1]
+			argsValue := valuePool.Get().([]reflect.Value)
+			argsValue[0] = server.objValue
+			for i := 0; i < len(args)-1; i++ {
+				argsValue[i+1] = reflect.ValueOf(args[i])
+			}
 
+			replyValues := objMethod.method.Func.Call(argsValue)
+			msg.reply = replyValues
 		}()
-		funcValue := reflect.ValueOf(msg.replyFunc)
-		funcValue.Call(retValues)
-		server.msgPool.Put(msg)
+		msg.pending <- msg
 	}
-	//retErrs := objMethod.value.Call([]reflect.Value{reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
-	//retErrs := objMethod.method.Func.Call([]reflect.Value{server.objValue, reflect.ValueOf(msg.args), reflect.ValueOf(msg.reply)})
+	//objMethod.value.Call([]reflect.Value{reflect.ValueOf(args)})
+	//objMethod.method.Func.Call([]reflect.Value{objValue, reflect.ValueOf(args)})
 }
 
-func (server *Server) start(index int) {
-	//log.All("Server %+v start index = %+v", server.objName, index)
+func (server *Server) start(index int32) {
 	defer server.waitGroup.Done()
 	for {
 		select {
 		case <-server.ctx.Done():
-			//log.Fatal("Server %+v stop index = %+v", server.objName, index)
 			atomic.StoreInt32(&server.done, 1)
 			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
 				return
@@ -212,9 +247,8 @@ func (server *Server) start(index int) {
 
 		case cache := <-server.cache:
 			msg := cache.(*Msg)
-			//log.All("%+v msg = %+v", server.objName, msg)
-			server.callBack(msg)
 			atomic.AddInt32(&server.recvNumber, 1)
+			server.callBack(msg)
 			if atomic.LoadInt32(&server.done) == 1 &&
 				atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
 				return
@@ -226,105 +260,142 @@ func (server *Server) start(index int) {
 func (server *Server) Stop() {
 	server.cancel()
 	server.waitGroup.Wait()
-	//log.Fatal("Server %+v stop", server.objName)
+
 }
 
-func (server *Server) checkArgv(objMethod *ObjMethod, args interface{}, reply interface{}) error {
+func (server *Server) object() interface{} {
+	return server.obj
+}
+
+func checkArgv(isFunc bool, args ...interface{}) error {
 	if isTest == false {
 		return nil
 	}
 
-	argName := reflect.TypeOf(args).Name()
-	if argName != objMethod.argName {
-		return log.Panic(errorCode.NewErrCode(0, "%+v : argName:%+v != objMethod.argName:%+v", server.objName, argName, objMethod.argName))
-	}
-
-	if reply != nil {
-		replyKind := reflect.TypeOf(reply).Kind()
-		if replyKind != reflect.Ptr {
-			return log.Panic(errorCode.NewErrCode(0, "%+v : replyKind:%+v != reflect.Ptr", server.objName, replyKind))
+	for i := 0; i < len(args); i++ {
+		argsKind := reflect.ValueOf(args[i]).Kind()
+		if argsKind == reflect.Invalid {
+			return log.Panic(errorCode.NewErrCode(0, "args index = %+v Invalid", i))
 		}
-
-		replyName := reflect.TypeOf(reply).Elem().Name()
-		if replyName != objMethod.replyName {
-			return log.Panic(errorCode.NewErrCode(0, "%+v : argName:%+v != objMethod.argName:%+v", server.objName, argName, objMethod.argName))
+		if isFunc && i == len(args)-1 && argsKind != reflect.Func {
+			return log.Panic(errorCode.NewErrCode(0, "last not func"))
 		}
 	}
+
 	return nil
 }
 
-func (server *Server) Send(method string, args interface{}) error {
-	//log.All("Server %+v Send method =%+v", server.objName, method)
-	objM := server.objMethod[method]
-	if objM == nil {
+func (server *Server) Send(method string, args ...interface{}) error {
+	if objM := server.objMethod[method]; objM == nil {
 		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
 	}
-	//log.All("objM = %+v", objM)
-	err := server.checkArgv(objM, args, nil)
-	if err != nil {
+
+	if err := checkArgv(false, args...); err != nil {
 		return err
 	}
 
 	msg := server.msgPool.Get().(*Msg)
-	msg.typ = "send"
+	msg.init()
+	msg.typ = typSend
 	msg.method = method
 	msg.args = args
-	msg.reply = nil
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
 	return nil
 }
 
-func (server *Server) asynCall(method string, args interface{}, reply interface{}, replyFunc interface{}) error {
-	//log.All("Server %+v Call method =%+v", server.objName, method)
-	objM := server.objMethod[method]
-	if objM == nil {
+func (server *Server) SendReq(method string, args ...interface{}) error {
+	if objM := server.objMethod[method]; objM == nil {
 		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
 	}
-	//log.All("objM = %+v", objM)
-	err := server.checkArgv(objM, args, reply)
-	if err != nil {
+
+	if err := checkArgv(true, args...); err != nil {
 		return err
 	}
 
 	msg := server.msgPool.Get().(*Msg)
-	msg.typ = "asynCall"
+	msg.init()
+	msg.typ = typSendReq
 	msg.method = method
 	msg.args = args
-	msg.reply = reply
-	msg.replyFunc = replyFunc
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
 	return nil
 }
 
-func (server *Server) Call(method string, args interface{}, reply interface{}) error {
-	//log.All("Server %+v Call method =%+v", server.objName, method)
-	objM := server.objMethod[method]
-	if objM == nil {
+func (server *Server) Call(method string, args ...interface{}) error {
+	if objM := server.objMethod[method]; objM == nil {
 		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
 	}
-	//log.All("objM = %+v", objM)
-	err := server.checkArgv(objM, args, reply)
-	if err != nil {
+
+	if err := checkArgv(false, args...); err != nil {
 		return err
 	}
 
 	msg := server.msgPool.Get().(*Msg)
-	msg.typ = "call"
+	msg.init()
+	defer server.msgPool.Put(msg)
+	msg.typ = typCall
 	msg.method = method
 	msg.args = args
-	msg.reply = reply
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
 	<-msg.pending
-	msgErr := msg.err
-	server.msgPool.Put(msg)
-	if msgErr == nil {
-		return nil
+
+	if msg.err != nil {
+		return msg.err.(error)
 	}
-	return msgErr.(error)
+
+	replyValues := msg.reply.([]reflect.Value)
+	if len(replyValues) > 0 {
+		first, ok := replyValues[0].Interface().(error)
+		if ok {
+			return first
+		}
+	}
+
+	return nil
+}
+
+func (server *Server) CallReq(method string, args ...interface{}) error {
+	if objM := server.objMethod[method]; objM == nil {
+		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
+	}
+
+	if err := checkArgv(true, args...); err != nil {
+		return err
+	}
+
+	msg := server.msgPool.Get().(*Msg)
+	msg.init()
+	defer server.msgPool.Put(msg)
+	msg.typ = typCallReq
+	msg.method = method
+	msg.args = args
+
+	atomic.AddInt32(&server.sendNumber, 1)
+	server.cache <- msg
+	<-msg.pending
+
+	if msg.err == nil {
+		replyFunc := args[len(args)-1]
+		replyFuncName := reflect.ValueOf(replyFunc)
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					msg.err = log.Panic(errorCode.NewErrCode(0, "%+v", err))
+				}
+			}()
+			replyFuncName.Call(msg.reply.([]reflect.Value))
+		}()
+	}
+
+	if msg.err != nil {
+		return msg.err.(error)
+	}
+
+	return nil
 }

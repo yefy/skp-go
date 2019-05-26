@@ -62,6 +62,12 @@ const (
 	LmodelFlags = Lscreen
 )
 
+var isPanic = true
+
+func SetPanic(b bool) {
+	isPanic = b
+}
+
 // A Logger represents an active logging object that generates lines of
 // output to an io.Writer. Each logging operation makes a single call to
 // the Writer's Write method. A Logger can be used simultaneously from
@@ -86,8 +92,7 @@ func New(fullPath string, prefix string, flag int, level int, model int) *Logger
 	var file *os.File
 	if model&Lfile != 0 {
 		var err error
-		file, err = os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		if err != nil {
+		if file, err = os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666); err != nil {
 			fmt.Println("打开日志文件失败(开启屏幕打印)：", err)
 			model = Lscreen
 		}
@@ -370,20 +375,45 @@ func Print(level int, calldepth int, format string, v ...interface{}) {
 
 func (l *Logger) Panic(err error) error {
 	if Lerr < l.level {
-		return nil
+		if isPanic {
+			panic(err)
+		}
+		return err
 	}
 	l.Output(Lerr, 2, err.Error())
-	panic(err)
+	if isPanic {
+		panic(err)
+	}
 	return err
 }
 
 func Panic(err error) error {
 	if Lerr < std.level {
-		panic(err)
+		if isPanic {
+			panic(err)
+		}
 		return err
 	}
 	std.Output(Lerr, 2, err.Error())
-	panic(err)
+	if isPanic {
+		panic(err)
+	}
+	return err
+}
+
+func (l *Logger) ErrorCode(err error) error {
+	if Lerr < l.level {
+		return err
+	}
+	l.Output(Lerr, 2, err.Error())
+	return err
+}
+
+func ErrorCode(err error) error {
+	if Lerr < std.level {
+		return err
+	}
+	std.Output(Lerr, 2, err.Error())
 	return err
 }
 
