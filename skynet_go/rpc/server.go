@@ -131,7 +131,7 @@ func NewServer(obj interface{}) *Server {
 	server.waitGroup = &sync.WaitGroup{}
 	server.ctx, server.cancel = context.WithCancel(context.Background())
 
-	server.Addoroutine(10)
+	server.Addoroutine(1)
 	return server
 }
 
