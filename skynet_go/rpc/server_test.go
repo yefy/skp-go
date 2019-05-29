@@ -108,7 +108,7 @@ func Test_ExampleTest_Send(t *testing.T) {
 		t.Error()
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Test_ExampleTest_SendReq(t *testing.T) {
@@ -137,7 +137,7 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 		t.Error()
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Test_ExampleTest_Call(t *testing.T) {
@@ -156,7 +156,7 @@ func Test_ExampleTest_Call(t *testing.T) {
 		t.Error()
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Test_ExampleTestError_Call(t *testing.T) {
@@ -175,7 +175,7 @@ func Test_ExampleTestError_Call(t *testing.T) {
 		t.Error()
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Test_ExampleTest_CallReq(t *testing.T) {
@@ -204,7 +204,7 @@ func Test_ExampleTest_CallReq(t *testing.T) {
 		t.Error()
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 //go test

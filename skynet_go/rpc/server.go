@@ -22,6 +22,12 @@ const (
 	typSendReq = "SendReq"
 )
 
+const (
+	stateStop = iota
+	stateStart
+	stateStopping
+)
+
 type Msg struct {
 	typ     string
 	method  string
@@ -50,66 +56,70 @@ type ObjMethod struct {
 	replyName string
 }
 
-type Server struct {
-	obj         interface{}
-	objName     string
-	objType     reflect.Type
-	objValue    reflect.Value
-	objKind     reflect.Kind
-	objMethod   map[string]*ObjMethod
-	cacheNumber int
-	cache       chan interface{}
-	coNumber    int32
-	waitGroup   *sync.WaitGroup
-	ctx         context.Context
-	cancel      context.CancelFunc
-	msgPool     *sync.Pool
-	valuePools  []*sync.Pool
-	sendNumber  int32
-	recvNumber  int32
-	done        int32
+type Service struct {
+	obj       interface{}
+	objName   string
+	objType   reflect.Type
+	objValue  reflect.Value
+	objKind   reflect.Kind
+	objMethod map[string]*ObjMethod
 }
 
-func parseMethod(server *Server, obj interface{}) error {
-	server.objType = reflect.TypeOf(obj)
-	server.objKind = server.objType.Kind()
-	if server.objKind != reflect.Ptr {
-		return log.Panic(errorCode.NewErrCode(0, "server.objKind != reflect.Ptr"))
+func NewService(obj interface{}) (*Service, error) {
+	s := &Service{}
+	s.obj = obj
+	s.objType = reflect.TypeOf(obj)
+	s.objKind = s.objType.Kind()
+	if s.objKind != reflect.Ptr {
+		return nil, log.Panic(errorCode.NewErrCode(0, "server.objKind != reflect.Ptr"))
 	}
-	server.objValue = reflect.ValueOf(obj)
-	server.objName = reflect.Indirect(server.objValue).Type().Name()
+	s.objValue = reflect.ValueOf(obj)
+	s.objName = reflect.Indirect(s.objValue).Type().Name()
 
-	for i := 0; i < server.objType.NumMethod(); i++ {
-		method := server.objType.Method(i)
+	s.objMethod = make(map[string]*ObjMethod)
+	for i := 0; i < s.objType.NumMethod(); i++ {
+		method := s.objType.Method(i)
 
 		objM := &ObjMethod{}
 		objM.method = method
 		objM.typ = method.Type
 		objM.name = method.Name
-		objM.value = server.objValue.MethodByName(method.Name)
+		objM.value = s.objValue.MethodByName(method.Name)
 		objM.argvIn = objM.value.Type().NumIn()
 		objM.argvOut = objM.value.Type().NumOut()
 
-		server.objMethod[objM.name] = objM
+		s.objMethod[objM.name] = objM
 	}
-	return nil
+
+	return s, nil
+}
+
+type Server struct {
+	service         *Service
+	cacheNumber     int
+	cache           chan interface{}
+	goroutineNumber int32
+	waitGroup       *sync.WaitGroup
+	ctx             context.Context
+	cancel          context.CancelFunc
+	msgPool         *sync.Pool
+	valuePools      []*sync.Pool
+	sendNumber      int32
+	recvNumber      int32
+	state           int32
+	waitMsg         int32
 }
 
 func NewServer(obj interface{}) *Server {
-	server := &Server{}
-	server.obj = obj
-	server.objMethod = make(map[string]*ObjMethod)
-	server.cacheNumber = 1000
-	server.cache = make(chan interface{}, server.cacheNumber)
-	server.coNumber = 0
-	server.sendNumber = 0
-	server.recvNumber = 0
-	server.done = 0
-
-	err := parseMethod(server, obj)
+	service, err := NewService(obj)
 	if err != nil {
 		return nil
 	}
+
+	server := &Server{}
+	server.service = service
+	server.cacheNumber = 1000
+	server.state = stateStop
 
 	server.msgPool = &sync.Pool{New: func() interface{} {
 		msg := &Msg{}
@@ -128,28 +138,59 @@ func NewServer(obj interface{}) *Server {
 		}
 	}
 
-	server.waitGroup = &sync.WaitGroup{}
-	server.ctx, server.cancel = context.WithCancel(context.Background())
+	server.Start()
 
-	server.Addoroutine(1)
 	return server
+}
+
+func (server *Server) object() interface{} {
+	return server.service.obj
 }
 
 func (server *Server) Addoroutine(num int) {
 	for i := 0; i < num; i++ {
-		atomic.AddInt32(&server.coNumber, 1)
+		atomic.AddInt32(&server.goroutineNumber, 1)
 		server.waitGroup.Add(1)
-		cNum := server.coNumber
-		go server.start(cNum)
+		goroutineNumber := server.goroutineNumber
+		go server.run(goroutineNumber)
 	}
 }
 
-func (server *Server) IsStop() bool {
-	return atomic.LoadInt32(&server.done) == 1
+func (server *Server) Start() {
+	if server.state == stateStop {
+		server.goroutineNumber = 0
+		server.sendNumber = 0
+		server.recvNumber = 0
+		server.state = stateStart
+		server.waitMsg = 1
+		server.cache = make(chan interface{}, server.cacheNumber)
+		server.waitGroup = &sync.WaitGroup{}
+		server.ctx, server.cancel = context.WithCancel(context.Background())
+		server.Addoroutine(1)
+	}
+}
+
+func (server *Server) Stop(waitMsg bool) {
+	if server.state == stateStart {
+		server.state = stateStopping
+		if waitMsg {
+			atomic.StoreInt32(&server.waitMsg, 1)
+		} else {
+			atomic.StoreInt32(&server.waitMsg, 0)
+		}
+		server.cancel()
+		server.waitGroup.Wait()
+		server.state = stateStop
+	}
+}
+
+func (server *Server) IsStopping() bool {
+	return atomic.LoadInt32(&server.state) == stateStopping
 }
 
 func (server *Server) callBack(msg *Msg) {
-	objMethod := server.objMethod[msg.method]
+	service := server.service
+	objMethod := service.objMethod[msg.method]
 	args := msg.args.([]interface{})
 
 	if msg.typ == typSend {
@@ -161,7 +202,7 @@ func (server *Server) callBack(msg *Msg) {
 			}()
 			valuePool := server.valuePools[len(args)]
 			argsValue := valuePool.Get().([]reflect.Value)
-			argsValue[0] = server.objValue
+			argsValue[0] = service.objValue
 			for i := 0; i < len(args); i++ {
 				argsValue[i+1] = reflect.ValueOf(args[i])
 			}
@@ -179,7 +220,7 @@ func (server *Server) callBack(msg *Msg) {
 			}()
 			valuePool := server.valuePools[len(args)-1]
 			argsValue := valuePool.Get().([]reflect.Value)
-			argsValue[0] = server.objValue
+			argsValue[0] = service.objValue
 			for i := 0; i < len(args)-1; i++ {
 				argsValue[i+1] = reflect.ValueOf(args[i])
 			}
@@ -202,7 +243,7 @@ func (server *Server) callBack(msg *Msg) {
 
 			valuePool := server.valuePools[len(args)]
 			argsValue := valuePool.Get().([]reflect.Value)
-			argsValue[0] = server.objValue
+			argsValue[0] = service.objValue
 			for i := 0; i < len(args); i++ {
 				argsValue[i+1] = reflect.ValueOf(args[i])
 			}
@@ -221,7 +262,7 @@ func (server *Server) callBack(msg *Msg) {
 
 			valuePool := server.valuePools[len(args)-1]
 			argsValue := valuePool.Get().([]reflect.Value)
-			argsValue[0] = server.objValue
+			argsValue[0] = service.objValue
 			for i := 0; i < len(args)-1; i++ {
 				argsValue[i+1] = reflect.ValueOf(args[i])
 			}
@@ -235,36 +276,41 @@ func (server *Server) callBack(msg *Msg) {
 	//objMethod.method.Func.Call([]reflect.Value{objValue, reflect.ValueOf(args)})
 }
 
-func (server *Server) start(index int32) {
+func (server *Server) isStopCo() bool {
+
+	if atomic.LoadInt32(&server.state) == stateStopping {
+		if atomic.LoadInt32(&server.waitMsg) == 0 {
+			return true
+		} else {
+			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (server *Server) run(index int32) {
 	defer server.waitGroup.Done()
+	done := server.ctx.Done()
 	for {
 		select {
-		case <-server.ctx.Done():
-			atomic.StoreInt32(&server.done, 1)
-			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
+		case <-done:
+			done = nil
+
+			if server.isStopCo() {
 				return
 			}
 
 		case cache := <-server.cache:
 			msg := cache.(*Msg)
-			atomic.AddInt32(&server.recvNumber, 1)
 			server.callBack(msg)
-			if atomic.LoadInt32(&server.done) == 1 &&
-				atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
+			atomic.AddInt32(&server.recvNumber, 1)
+			if server.isStopCo() {
 				return
 			}
 		}
 	}
-}
-
-func (server *Server) Stop() {
-	server.cancel()
-	server.waitGroup.Wait()
-
-}
-
-func (server *Server) object() interface{} {
-	return server.obj
 }
 
 func checkArgv(isFunc bool, args ...interface{}) error {
@@ -286,8 +332,9 @@ func checkArgv(isFunc bool, args ...interface{}) error {
 }
 
 func (server *Server) Send(method string, args ...interface{}) error {
-	if objM := server.objMethod[method]; objM == nil {
-		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
+	service := server.service
+	if objM := service.objMethod[method]; objM == nil {
+		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
 	}
 
 	if err := checkArgv(false, args...); err != nil {
@@ -306,8 +353,9 @@ func (server *Server) Send(method string, args ...interface{}) error {
 }
 
 func (server *Server) SendReq(method string, args ...interface{}) error {
-	if objM := server.objMethod[method]; objM == nil {
-		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
+	service := server.service
+	if objM := service.objMethod[method]; objM == nil {
+		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
 	}
 
 	if err := checkArgv(true, args...); err != nil {
@@ -326,8 +374,9 @@ func (server *Server) SendReq(method string, args ...interface{}) error {
 }
 
 func (server *Server) Call(method string, args ...interface{}) error {
-	if objM := server.objMethod[method]; objM == nil {
-		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
+	service := server.service
+	if objM := service.objMethod[method]; objM == nil {
+		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
 	}
 
 	if err := checkArgv(false, args...); err != nil {
@@ -361,8 +410,9 @@ func (server *Server) Call(method string, args ...interface{}) error {
 }
 
 func (server *Server) CallReq(method string, args ...interface{}) error {
-	if objM := server.objMethod[method]; objM == nil {
-		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", server.objName, method))
+	service := server.service
+	if objM := service.objMethod[method]; objM == nil {
+		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
 	}
 
 	if err := checkArgv(true, args...); err != nil {

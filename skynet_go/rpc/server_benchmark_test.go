@@ -21,7 +21,7 @@ import (
 func Benchmark_ExampleTest_Send(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := serverTest.data()
 		out := ServerTest{}
@@ -31,13 +31,13 @@ func Benchmark_ExampleTest_Send(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExampleTest_SendReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := serverTest.data()
 		out := ServerTest{}
@@ -61,13 +61,13 @@ func Benchmark_ExampleTest_SendReq(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExampleTest_Call(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := serverTest.data()
 		out := ServerTest{}
@@ -80,13 +80,13 @@ func Benchmark_ExampleTest_Call(b *testing.B) {
 			b.Error()
 		}
 	}
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExampleTest_CallReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := serverTest.data()
 		out := ServerTest{}
@@ -110,7 +110,7 @@ func Benchmark_ExampleTest_CallReq(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 //go test

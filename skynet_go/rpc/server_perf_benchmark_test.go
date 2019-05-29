@@ -21,7 +21,7 @@ import (
 func Benchmark_ExamplePerf_Send(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
@@ -31,13 +31,13 @@ func Benchmark_ExamplePerf_Send(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExamplePerf_SendReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
@@ -61,13 +61,13 @@ func Benchmark_ExamplePerf_SendReq(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExamplePerf_Call(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
@@ -80,13 +80,13 @@ func Benchmark_ExamplePerf_Call(b *testing.B) {
 			b.Error()
 		}
 	}
-	server.Stop()
+	server.Stop(true)
 }
 
 func Benchmark_ExamplePerf_CallReq(b *testing.B) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
-	server := NewServer(1, 1000, serverTest)
+	server := NewServer(serverTest)
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
@@ -110,7 +110,7 @@ func Benchmark_ExamplePerf_CallReq(b *testing.B) {
 		}
 	}
 
-	server.Stop()
+	server.Stop(true)
 }
 
 //go test
