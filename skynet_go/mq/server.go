@@ -6,22 +6,26 @@ import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/rpc"
 	"sync"
-	_ "sync/atomic"
+	"sync/atomic"
 	_ "time"
 )
 
 type Msg struct {
-	typ        string
-	harbor     int32
-	topic      string
-	tag        string
-	order      uint64
-	instance   string
-	class      string
-	method     string
-	pendingSeq uint64
-	bodyType   string //gob  proto
-	body       string
+	Typ        string //Send SendReq Call CallReq
+	Harbor     int32  //harbor 全局唯一的id  对应instance
+	Instance   string //xx_$$ (模块名)_(进程id)
+	Topic      string //模块名
+	Tag        string //分标识
+	Order      uint64 //有序消息
+	Class      string //远端对象名字
+	Method     string //远端对象的方法
+	PendingSeq uint64 //回调seq
+	BodyType   string //编码 gob  proto
+	Body       string //数据包
+}
+
+func NewMsg() *Msg {
+	return nil
 }
 
 type Queue struct {
@@ -30,37 +34,66 @@ type Queue struct {
 	conn     *Conn
 }
 
+func NewQueue() *Queue {
+	return nil
+}
+
 func (q *Queue) Write() {
 
 }
 
 type Conn struct {
-	server      *Server
-	harbor      int32
-	instance    string //topic_$$
-	conn        *net.TCPConn
+	vector   Vector
+	server   *Server
+	harbor   int32
+	instance string //topic_$$
+	conn     *net.TCPConn
+
 	topic       string
 	tag         string
+	topicTag    map[string]bool
 	harborQueue *Queue
 }
 
-func (i *Conn) Read() {
+func NewConn() *Conn {
+	c := &Conn{}
+	return c
+}
 
+func (i *Conn) Start() {
+}
+
+func (i *Conn) IsTopicTag() {
+}
+
+func (i *Conn) ReadMsg() (*Msg, error) {
+	return nil, nil
 }
 
 func (i *Conn) Write() {
 
 }
 
+type TopicConns struct {
+	harborConn map[int32]*Conn
+}
+
+func NewTopicConns() *TopicConns {
+	t := &TopicConns{}
+	t.harborConn = make(map[int32]*Conn)
+	return t
+}
+
 type Server struct {
-	rpcServer     *rpc.Server
-	listen        *net.TCPListener
-	mutex         *sync.Mutex
-	harbor        int32
-	instanceConn  map[string]*Conn
-	topicTagConn  map[string]*Conn
-	harborQueue   map[int32]*Queue
-	topicTagQueue map[string]*Queue
+	rpcServer *rpc.Server
+	listen    *net.TCPListener
+	mutex     *sync.Mutex
+	harbor    int32
+	//instanceConn map[string]*Conn
+	instanceConn sync.Map
+	//harborConn   map[int32]*Conn
+	harborConn sync.Map
+	topicConns map[string]*TopicConns
 }
 
 func NewServer() *Server {
@@ -94,33 +127,40 @@ func (s *Server) Accept() {
 			log.Fatal(err.Error())
 			return
 		}
-		_ = conn
-		// go func(conn *net.TCPConn) {
-		// 	//读取对象名字
-		// 	var instanceName string
-		// 	s.mutex.Lock()
-		// 	instance := s.instanceMap[instanceName]
-		// 	if instance == nil {
-		// 		s.session++
-		// 		instance = &Instance{}
-		// 		instance.session = s.session
-		// 		instance.conn = conn
-		// 		s.instanceMap[instanceName] = instance
-		// 	} else {
-		// 		if instance.conn {
-		// 			instance.conn.Close()
-		// 		}
-		// 		instance.conn = conn
-		// 	}
-		// 	s.mutex.Unlock()
-		// 	// 返回  session
 
-		// }(conn)
+		c := NewConn()
+		c.server = s
+		c.conn = conn
+		c.harbor = atomic.AddInt32(&s.harbor, 1)
 
-		// s.rpcServer.Addoroutine(1)
-		// if err := s.rpcServer.Send("Conn", conn); err != nil {
-		// 	log.Panic(errorCode.NewErrCode(0, err.Error()))
-		// }
+		go func(newConn *Conn) {
+			msg, msgErr := newConn.ReadMsg()
+			if msgErr != nil {
+				newConn.conn.Close()
+				return
+			}
+			if msg.Class != "Mq" ||
+				msg.Method != "Register" ||
+				len(msg.Instance) < 1 {
+				log.Err("msg.Class != Mq || msg.Method != Register, msg = %+v", msg)
+				newConn.conn.Close()
+				return
+			}
+
+			oldConnI, oldConnOk := s.instanceConn.LoadOrStore(msg.Instance, newConn)
+			if oldConnOk {
+				oldConn := oldConnI.(Conn)
+				if msg.Harbor != oldConn.harbor {
+					log.Err("msg.Harbor != oldConn.Harbor, msg.Harbor = %+v, oldConn.Harbor = %+v", msg.Harbor, oldConn.harbor)
+					newConn.conn.Close()
+				} else {
+					oldConn.conn = newConn.conn
+				}
+			} else {
+				newConn.instance = msg.Instance
+				newConn.Start()
+			}
+		}(c)
 	}
 }
 
@@ -149,5 +189,5 @@ func (s *Server) Close() {
 	if err := s.listen.Close(); err != nil {
 		log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
-	s.rpcServer.Stop()
+	s.rpcServer.Stop(true)
 }

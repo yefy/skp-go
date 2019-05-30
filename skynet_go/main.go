@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 	log "skp-go/skynet_go/logger"
+	"sync"
+	"unsafe"
 )
 
 var _ = fmt.Errorf
@@ -27,9 +29,35 @@ func (g *GobTest) GetN1() int {
 	return g.N1
 }
 
+func StringTest() {
+	var s string = "123"
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	log.Fatal("s = %+v, sh = %+v, Data = %p", s, sh, sh.Data)
+	var s2 string = s + "1"
+	sh2 := (*reflect.StringHeader)(unsafe.Pointer(&s2))
+	log.Fatal("s2 = %+v, sh2 = %+v, Data = %p", s2, sh2, sh2.Data)
+	//bh := reflect.SliceHeader{sh.Data, sh.Len, 0}
+}
+
 func main() {
 	log.NewGlobalLogger("./global.log", "", log.LstdFlags, log.Lall, log.Lscreen|log.Lfile)
 	log.All("main start")
+
+	StringTest()
+
+	var smap sync.Map
+	smap.Store(1, 11)
+	v1, isok1 := smap.Load(1)
+	log.Fatal("v1 = %+v, isok1 = %+v", v1, isok1)
+	xxx, xxxok := smap.LoadOrStore(1, 22)
+	log.Fatal("xxx = %+v, xxxok = %+v", xxx, xxxok)
+	v2, isok2 := smap.Load(1)
+	log.Fatal("v2 = %+v, isok2 = %+v", v2, isok2)
+	smap.Store(2, 22)
+	smap.Range(func(key, value interface{}) bool {
+		log.Fatal("key = %+v, value = %+v", key, value)
+		return true
+	})
 
 	network := new(bytes.Buffer)
 	enc := gob.NewEncoder(network)

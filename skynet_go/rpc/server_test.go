@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"fmt"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"testing"
@@ -91,8 +92,19 @@ func (serverTest *ServerTest) ExampleTestError(in *ServerTest, out *ServerTest) 
 	return errorCode.NewErrCode(0, "ExampleTest")
 }
 
+var perfNumber int = 10
+
+func SetPerfNumber(number int) {
+	perfNumber = number
+}
+
 func (serverTest *ServerTest) ExamplePerf(in *int, out *int) (*int, *int) {
-	*out = *in
+	for i := 0; i < perfNumber; i++ {
+		*out = *in
+		inStr := fmt.Sprintf("ExamplePerf_%d", i)
+		var outStr string = inStr + "outStr"
+		log.All("inStr = %s, outStr = %s", inStr, outStr)
+	}
 	return in, out
 }
 
