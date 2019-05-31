@@ -1,13 +1,35 @@
 package mq
 
+import (
+	"net"
+	"time"
+)
+
 type Vector struct {
-	buffer []byte
+	buffer     []byte
+	connBuffer []byte
+	conn       *net.TCPConn
 }
 
 func NewVector() *Vector {
 	v := &Vector{}
 	v.buffer = make([]byte, 0, 4096)
+	v.connBuffer = make([]byte, 4096)
 	return v
+}
+
+func (v *Vector) SetConn(conn *net.TCPConn) {
+	v.conn = conn
+}
+
+func (v *Vector) read(timeout time.Duration) error {
+	v.conn.SetReadDeadline(time.Now().Add(timeout * time.Second))
+	size, err := v.conn.Read(v.connBuffer)
+	if err != nil {
+		return err
+	}
+	v.Put(v.connBuffer[:size])
+	return nil
 }
 
 func (v *Vector) Put(buf []byte) {

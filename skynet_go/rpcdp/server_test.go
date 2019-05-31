@@ -1,7 +1,8 @@
-package rpc
+package rpcdp
 
 import (
 	"fmt"
+	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"testing"
@@ -73,6 +74,11 @@ func (s *ServerTest) data() *ServerTest {
 	return server
 }
 
+func (s *ServerTest) print() {
+	log.Fatal("%+v", s)
+	log.Fatal("*s.pn1 = %+v,*s.pn2 = %+v,*s.pstr1 = %+v,*s.pstr2 = %+v", *s.pn1, *s.pn2, *s.pstr1, *s.pstr2)
+}
+
 func NewServerTest() *ServerTest {
 	serverTest := &ServerTest{}
 	return serverTest
@@ -81,15 +87,42 @@ func NewServerTest() *ServerTest {
 func (serverTest *ServerTest) RPC_Server(server *Server) {
 
 }
+func (serverTest *ServerTest) RPC_Dispath_Send(method string, args []interface{}) error {
+	return serverTest.callBack(method, args)
+}
+func (serverTest *ServerTest) RPC_Dispath_Call(method string, args []interface{}) error {
+	return serverTest.callBack(method, args)
+}
+
 func (serverTest *ServerTest) RPC_Close() {
 
 }
 
-func (serverTest *ServerTest) ExampleTest(in *ServerTest, out *ServerTest) (*ServerTest, error) {
-	log.All("in = %+v", in)
+func (serverTest *ServerTest) callBack(method string, args []interface{}) error {
+	if method == "ExampleTest" {
+		in := args[0].(*ServerTest)
+		out := args[0].(*ServerTest)
+		return serverTest.ExampleTest(in, out)
+	} else if method == "ExampleTestError" {
+		in := args[0].(*ServerTest)
+		out := args[0].(*ServerTest)
+		return serverTest.ExampleTestError(in, out)
+	} else if method == "ExamplePerf" {
+		in := args[0].(*int)
+		out := args[0].(*int)
+		return serverTest.ExamplePerf(in, out)
+	}
+	return nil
+}
+
+func (serverTest *ServerTest) ExampleTest(in *ServerTest, out *ServerTest) error {
+	//log.Fatal("in = %+v", *in)
+	in.print()
 	*out = *in.clone()
+	out.print()
+	//log.Fatal("out = %+v", *out)
 	//return out, errorCode.NewErrCode(0, "ExampleTest")
-	return out, nil
+	return nil
 }
 
 func (serverTest *ServerTest) ExampleTestError(in *ServerTest, out *ServerTest) error {
@@ -105,16 +138,17 @@ func SetPerfNumber(number int) {
 	perfNumber = number
 }
 
-func (serverTest *ServerTest) ExamplePerf(in *int, out *int) (*int, *int) {
+func (serverTest *ServerTest) ExamplePerf(in *int, out *int) error {
 	for i := 0; i < perfNumber; i++ {
 		*out = *in
 		inStr := fmt.Sprintf("ExamplePerf_%d", i)
 		var outStr string = inStr + "outStr"
 		log.All("inStr = %s, outStr = %s", inStr, outStr)
 	}
-	return in, out
+	return nil
 }
 
+/*
 func Test_ExampleTest_Send(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
@@ -122,13 +156,11 @@ func Test_ExampleTest_Send(t *testing.T) {
 
 	in := serverTest.data()
 	out := ServerTest{}
-	err := server.Send("ExampleTest", in, &out)
-	if err != nil {
-		t.Error()
-	}
+	server.Send("ExampleTest", in, &out)
 
 	server.Stop(true)
 }
+*/
 
 func Test_ExampleTest_SendReq(t *testing.T) {
 	log.SetLevel(log.Lerr)
@@ -138,27 +170,22 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 	in := serverTest.data()
 	out := ServerTest{}
 
-	err := server.SendReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
+	server.SendReq(func(err error) {
+		in.print()
+		out.print()
 		if in.compare(&out) == false {
 			t.Error()
 		}
 
-		if in.compare(resServer) == false {
+		if err != nil {
 			t.Error()
 		}
-
-		if resErr != nil {
-			t.Error()
-		}
-
-	})
-	if err != nil {
-		t.Error()
-	}
+	}, "ExampleTest", in, &out)
 
 	server.Stop(true)
 }
 
+/*
 func Test_ExampleTest_Call(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
@@ -196,36 +223,7 @@ func Test_ExampleTestError_Call(t *testing.T) {
 
 	server.Stop(true)
 }
-
-func Test_ExampleTest_CallReq(t *testing.T) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
-	server := NewServer(serverTest)
-
-	in := serverTest.data()
-	out := ServerTest{}
-
-	err := server.CallReq("ExampleTest", in, &out, func(resServer *ServerTest, resErr error) {
-		if in.compare(&out) == false {
-			t.Error()
-		}
-
-		if in.compare(resServer) == false {
-			t.Error()
-		}
-
-		if resErr != nil {
-			t.Error()
-		}
-
-	})
-	if err != nil {
-		t.Error()
-	}
-
-	server.Stop(true)
-}
-
+*/
 //go test
 
 //测试所有的文件 go test，将对当前目录下的所有*_test.go文件进行编译并自动运行测试。

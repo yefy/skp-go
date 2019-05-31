@@ -57,7 +57,7 @@ type ObjMethod struct {
 }
 
 type Service struct {
-	obj       interface{}
+	obj       ServerInterface
 	objName   string
 	objType   reflect.Type
 	objValue  reflect.Value
@@ -65,7 +65,7 @@ type Service struct {
 	objMethod map[string]*ObjMethod
 }
 
-func NewService(obj interface{}) (*Service, error) {
+func NewService(obj ServerInterface) (*Service, error) {
 	s := &Service{}
 	s.obj = obj
 	s.objType = reflect.TypeOf(obj)
@@ -94,6 +94,11 @@ func NewService(obj interface{}) (*Service, error) {
 	return s, nil
 }
 
+type ServerInterface interface {
+	RPC_Server(*Server)
+	RPC_Close()
+}
+
 type Server struct {
 	service         *Service
 	cacheNumber     int
@@ -110,7 +115,7 @@ type Server struct {
 	waitMsg         int32
 }
 
-func NewServer(obj interface{}) *Server {
+func NewServer(obj ServerInterface) *Server {
 	service, err := NewService(obj)
 	if err != nil {
 		return nil
@@ -137,6 +142,8 @@ func NewServer(obj interface{}) *Server {
 		},
 		}
 	}
+
+	obj.RPC_Server(server)
 
 	server.Start()
 
@@ -170,6 +177,12 @@ func (server *Server) Start() {
 	}
 }
 
+func (server *Server) SendStop(waitMsg bool) {
+	go func() {
+		server.Stop(waitMsg)
+	}()
+}
+
 func (server *Server) Stop(waitMsg bool) {
 	if server.state == stateStart {
 		server.state = stateStopping
@@ -181,11 +194,25 @@ func (server *Server) Stop(waitMsg bool) {
 		server.cancel()
 		server.waitGroup.Wait()
 		server.state = stateStop
+		server.service.obj.RPC_Close()
 	}
 }
 
-func (server *Server) IsStopping() bool {
+func (server *Server) IsStop() bool {
 	return atomic.LoadInt32(&server.state) == stateStopping
+}
+
+func (server *Server) isStopping() bool {
+	if atomic.LoadInt32(&server.state) == stateStopping {
+		if atomic.LoadInt32(&server.waitMsg) == 0 {
+			return true
+		} else {
+			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (server *Server) callBack(msg *Msg) {
@@ -276,20 +303,6 @@ func (server *Server) callBack(msg *Msg) {
 	//objMethod.method.Func.Call([]reflect.Value{objValue, reflect.ValueOf(args)})
 }
 
-func (server *Server) isStopCo() bool {
-
-	if atomic.LoadInt32(&server.state) == stateStopping {
-		if atomic.LoadInt32(&server.waitMsg) == 0 {
-			return true
-		} else {
-			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (server *Server) run(index int32) {
 	defer server.waitGroup.Done()
 	done := server.ctx.Done()
@@ -297,16 +310,14 @@ func (server *Server) run(index int32) {
 		select {
 		case <-done:
 			done = nil
-
-			if server.isStopCo() {
+			if server.isStopping() {
 				return
 			}
-
 		case cache := <-server.cache:
 			msg := cache.(*Msg)
 			server.callBack(msg)
 			atomic.AddInt32(&server.recvNumber, 1)
-			if server.isStopCo() {
+			if server.isStopping() {
 				return
 			}
 		}

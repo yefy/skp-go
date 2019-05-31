@@ -1,23 +1,16 @@
 package mq
 
 import (
-	"net"
 	log "skp-go/skynet_go/logger"
 	"testing"
-	"time"
 )
 
-func Test_Broker(t *testing.T) {
+func Test_Server(t *testing.T) {
 	log.SetLevel(log.Lerr)
-	broker := NewBroker()
-	broker.Listen(":5678")
-	time.Sleep(1 * time.Second)
-
-	tcpaddr, _ := net.ResolveTCPAddr("tcp4", ":5678")
-	tcpconn, _ := net.DialTCP("tcp", nil, tcpaddr)
-	tcpconn.Write([]byte("GET / HTTP/1.1 \r\n\r\n"))
-	time.Sleep(1 * time.Second)
-	broker.Close()
+	server := NewServer()
+	server.Listen(":5678")
+	wait := make(chan int)
+	<-wait
 }
 
 //go test

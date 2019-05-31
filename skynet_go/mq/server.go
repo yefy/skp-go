@@ -7,13 +7,13 @@ import (
 	"skp-go/skynet_go/rpc"
 	"sync"
 	"sync/atomic"
-	_ "time"
+	"time"
 )
 
-type Msg struct {
+type MqMsg struct {
 	Typ        string //Send SendReq Call CallReq
 	Harbor     int32  //harbor 全局唯一的id  对应instance
-	Instance   string //xx_$$ (模块名)_(进程id)
+	Instance   string //xx_ip_$$ (模块名)_(ip)_(进程id)
 	Topic      string //模块名
 	Tag        string //分标识
 	Order      uint64 //有序消息
@@ -24,7 +24,7 @@ type Msg struct {
 	Body       string //数据包
 }
 
-func NewMsg() *Msg {
+func NewMqMsg() *MqMsg {
 	return nil
 }
 
@@ -42,37 +42,139 @@ func (q *Queue) Write() {
 
 }
 
-type Conn struct {
-	vector   Vector
-	server   *Server
-	harbor   int32
-	instance string //topic_$$
-	conn     *net.TCPConn
-
-	topic       string
-	tag         string
-	topicTag    map[string]bool
-	harborQueue *Queue
+//==================SHConsumer================
+type SHConsumer struct {
+	rpcServer *rpc.Server
+	conn      *Conn
+	tcpConn   *net.TCPConn
+	vector    Vector
 }
 
-func NewConn() *Conn {
-	c := &Conn{}
+func NewSHConsumer(conn *Conn) *SHConsumer {
+	c := &SHConsumer{}
+	c.rpcServer = rpc.NewServer(c)
+	c.conn = conn
+	c.tcpConn = c.conn.GetTcpConn()
+	c.vector.SetConn(c.tcpConn)
 	return c
 }
 
-func (i *Conn) Start() {
+func (c *SHConsumer) Start() {
+	c.rpcServer.Addoroutine(1)
+	c.rpcServer.Send("Read")
 }
 
-func (i *Conn) IsTopicTag() {
+func (c *SHConsumer) Read() {
+	for {
+		if c.rpcServer.IsStopping() {
+			log.Fatal("rpcRead stop")
+			return
+		}
+
+		msg, err := c.ReadMqMsg(5)
+		if err != nil {
+			continue
+		}
+		_ = msg
+
+	}
 }
 
-func (i *Conn) ReadMsg() (*Msg, error) {
+func (c *SHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
+	for {
+		if c.rpcServer.IsStopping() {
+			log.Fatal("rpcRead stop")
+			return nil, nil
+		}
+		//获取msg 如果有返回  如果没有接收数据 超时返回错误
+		c.vector.read(timeout)
+	}
+
 	return nil, nil
 }
 
-func (i *Conn) Write() {
-
+//=====================SHProducer===============
+type SHProducer struct {
+	rpcServer *rpc.Server
+	conn      *Conn
+	tcpConn   *net.TCPConn
 }
+
+func NewSHProducer(conn *Conn) *SHProducer {
+	p := &SHProducer{}
+	p.rpcServer = rpc.NewServer(p)
+	p.conn = conn
+	p.tcpConn = p.conn.GetTcpConn()
+	//sendList
+	//waitList
+	return p
+}
+
+func (c *SHProducer) Start() {
+	c.rpcServer.Addoroutine(1)
+	c.rpcServer.Send("Write")
+}
+
+func (p *SHProducer) SendMqMsg() {
+}
+
+func (p *SHProducer) Send() {
+}
+
+func (p *SHProducer) Write() {
+	//return c.conn.Write(b)
+}
+
+//======================Conn================
+type Conn struct {
+	server   *Server
+	harbor   int32
+	instance string //topic_$$
+	mutex    sync.Mutex
+	tcpConn  *net.TCPConn
+
+	topic    string
+	tag      string
+	topicTag map[string]bool
+
+	shConsumer *SHConsumer
+	shProducer *SHProducer
+}
+
+func NewConn(server *Server, tcpConn *net.TCPConn, harbor int32) *Conn {
+	c := &Conn{}
+	c.server = server
+	c.harbor = harbor
+	c.tcpConn = tcpConn
+	c.shConsumer = NewSHConsumer(c)
+	c.shProducer = NewSHProducer(c)
+	return c
+}
+
+func (c *Conn) GetTcpConn() *net.TCPConn {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+	return c.tcpConn
+}
+
+func (c *Conn) SetTcpConn(tcpconn *net.TCPConn) {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+	c.tcpConn = tcpconn
+}
+
+func (c *Conn) Start() {
+	c.shConsumer.Start()
+	c.shProducer.Start()
+}
+
+// func (c *Conn) Stop() {
+// 	c.conn.Close()
+// 	c.rpcRead.Stop(false)
+// }
+
+// func (c *Conn) IsTopicTag() {
+// }
 
 type TopicConns struct {
 	harborConn map[int32]*Conn
@@ -84,10 +186,10 @@ func NewTopicConns() *TopicConns {
 	return t
 }
 
+//==================Server===========
 type Server struct {
 	rpcServer *rpc.Server
 	listen    *net.TCPListener
-	mutex     *sync.Mutex
 	harbor    int32
 	//instanceConn map[string]*Conn
 	instanceConn sync.Map
@@ -122,68 +224,48 @@ func (s *Server) Listen(address string) error {
 
 func (s *Server) Accept() {
 	for {
-		conn, err := s.listen.AcceptTCP()
+		tcpConn, err := s.listen.AcceptTCP()
 		if err != nil {
 			log.Fatal(err.Error())
 			return
 		}
 
-		c := NewConn()
-		c.server = s
-		c.conn = conn
-		c.harbor = atomic.AddInt32(&s.harbor, 1)
+		log.Fatal("本地IP地址: %s, 远程IP地址:%s", tcpConn.LocalAddr(), tcpConn.RemoteAddr())
+		//输出：220.181.111.188:80
+
+		conn := NewConn(s, tcpConn, atomic.AddInt32(&s.harbor, 1))
 
 		go func(newConn *Conn) {
-			msg, msgErr := newConn.ReadMsg()
+			msg, msgErr := newConn.shConsumer.ReadMqMsg(2)
 			if msgErr != nil {
-				newConn.conn.Close()
+				newConn.tcpConn.Close()
 				return
 			}
 			if msg.Class != "Mq" ||
 				msg.Method != "Register" ||
 				len(msg.Instance) < 1 {
 				log.Err("msg.Class != Mq || msg.Method != Register, msg = %+v", msg)
-				newConn.conn.Close()
+				newConn.tcpConn.Close()
 				return
 			}
+			newConn.instance = msg.Instance
 
-			oldConnI, oldConnOk := s.instanceConn.LoadOrStore(msg.Instance, newConn)
-			if oldConnOk {
-				oldConn := oldConnI.(Conn)
+			connI, connOk := s.instanceConn.LoadOrStore(newConn.instance, newConn)
+			if connOk {
+				oldConn := connI.(Conn)
 				if msg.Harbor != oldConn.harbor {
 					log.Err("msg.Harbor != oldConn.Harbor, msg.Harbor = %+v, oldConn.Harbor = %+v", msg.Harbor, oldConn.harbor)
-					newConn.conn.Close()
+					newConn.tcpConn.Close()
 				} else {
-					oldConn.conn = newConn.conn
+					oldConn.SetTcpConn(newConn.tcpConn)
 				}
 			} else {
-				newConn.instance = msg.Instance
+				s.harborConn.Store(newConn.harbor, newConn)
 				newConn.Start()
 			}
-		}(c)
+		}(conn)
 	}
 }
-
-// func (s *Server) Conn(conn *net.TCPConn) {
-// 	defer conn.Close()
-// 	buf := make([]byte, 4096)
-// 	v := NewVector()
-// 	for {
-// 		if s.rpcServer.IsStop() {
-// 			log.Fatal("rpcServer stop")
-// 			return
-// 		}
-
-// 		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-// 		size, err := conn.Read(buf)
-// 		if err != nil {
-// 			log.Fatal(err.Error())
-// 			continue
-// 		}
-// 		v.Put(buf[:size])
-// 		log.Fatal("buf = %s", string(v.GetAll()))
-// 	}
-// }
 
 func (s *Server) Close() {
 	if err := s.listen.Close(); err != nil {
