@@ -12,7 +12,7 @@ func Test_Broker(t *testing.T) {
 		str := strconv.Itoa(i)
 		v.Put([]byte(str))
 	}
-	v.Print()
+
 	fmt.Println(string(v.Get(100000)))
 
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 )
 
+//go test server_test.go server.go mqMsg.pb.go vector.go
+
 func Test_Server(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	server := NewServer()

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"reflect"
@@ -39,16 +40,37 @@ func StringTest() {
 	//bh := reflect.SliceHeader{sh.Data, sh.Len, 0}
 }
 
+//整形转换成字节
+func IntToBytes(n int) []byte {
+	x := int32(n)
+
+	bytesBuffer := bytes.NewBuffer([]byte{})
+	binary.Write(bytesBuffer, binary.BigEndian, x)
+	return bytesBuffer.Bytes()
+}
+
+//字节转换成整形
+func BytesToInt(b []byte) int {
+	bytesBuffer := bytes.NewBuffer(b)
+
+	var x int32
+	binary.Read(bytesBuffer, binary.BigEndian, &x)
+
+	return int(x)
+}
+
 func main() {
+	bbb := IntToBytes(11111111111111111)
+	fmt.Println("len(bbb)", len(bbb))
 	log.NewGlobalLogger("./global.log", "", log.LstdFlags, log.Lall, log.Lscreen|log.Lfile)
 	log.All("main start")
 
 	StringTest()
 
 	var smap sync.Map
-	smap.Store(1, 11)
-	v1, isok1 := smap.Load(1)
-	log.Fatal("v1 = %+v, isok1 = %+v", v1, isok1)
+	// smap.Store(1, 11)
+	// v1, isok1 := smap.Load(1)
+	// log.Fatal("v1 = %+v, isok1 = %+v", v1, isok1)
 	xxx, xxxok := smap.LoadOrStore(1, 22)
 	log.Fatal("xxx = %+v, xxxok = %+v", xxx, xxxok)
 	v2, isok2 := smap.Load(1)

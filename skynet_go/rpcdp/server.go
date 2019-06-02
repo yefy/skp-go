@@ -39,10 +39,26 @@ func (m *Msg) init() {
 type CallBack func(error)
 
 type ServerInterface interface {
-	RPC_Server(*Server)
-	RPC_Dispath_Send(method string, args []interface{}) error
-	RPC_Dispath_Call(method string, args []interface{}) error
+	RPC_SetServer(*Server)
+	RPC_GetServer() *Server
+	RPC_Dispath(method string, args []interface{}) error
 	RPC_Close()
+}
+
+type ServerBase struct {
+	server *Server
+}
+
+func (sb *ServerBase) RPC_SetServer(server *Server) {
+	sb.server = server
+}
+
+func (sb *ServerBase) RPC_GetServer() *Server {
+	return sb.server
+}
+
+func (sb *ServerBase) RPC_Close() {
+
 }
 
 type Server struct {
@@ -73,7 +89,7 @@ func NewServer(obj ServerInterface) *Server {
 	},
 	}
 
-	obj.RPC_Server(server)
+	obj.RPC_SetServer(server)
 
 	server.Start()
 
@@ -157,7 +173,7 @@ func (server *Server) callBack(msg *Msg) {
 				}
 			}()
 
-			service.RPC_Dispath_Send(msg.method, args)
+			service.RPC_Dispath(msg.method, args)
 		}()
 		server.msgPool.Put(msg)
 	} else if msg.typ == typSendReq {
@@ -168,7 +184,7 @@ func (server *Server) callBack(msg *Msg) {
 				}
 			}()
 
-			err := service.RPC_Dispath_Send(msg.method, args)
+			err := service.RPC_Dispath(msg.method, args)
 			msg.callBack(err)
 		}()
 
@@ -181,7 +197,7 @@ func (server *Server) callBack(msg *Msg) {
 				}
 			}()
 
-			err := service.RPC_Dispath_Call(msg.method, args)
+			err := service.RPC_Dispath(msg.method, args)
 			msg.err = err
 		}()
 		msg.pending <- msg

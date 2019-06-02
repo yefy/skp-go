@@ -2,7 +2,6 @@ package rpcdp
 
 import (
 	"fmt"
-	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"testing"
@@ -11,6 +10,7 @@ import (
 var _ = errorCode.NewErrCode
 
 type ServerTest struct {
+	ServerBase
 	n1    int
 	n2    int
 	str1  string
@@ -84,32 +84,18 @@ func NewServerTest() *ServerTest {
 	return serverTest
 }
 
-func (serverTest *ServerTest) RPC_Server(server *Server) {
-
-}
-func (serverTest *ServerTest) RPC_Dispath_Send(method string, args []interface{}) error {
-	return serverTest.callBack(method, args)
-}
-func (serverTest *ServerTest) RPC_Dispath_Call(method string, args []interface{}) error {
-	return serverTest.callBack(method, args)
-}
-
-func (serverTest *ServerTest) RPC_Close() {
-
-}
-
-func (serverTest *ServerTest) callBack(method string, args []interface{}) error {
+func (serverTest *ServerTest) RPC_Dispath(method string, args []interface{}) error {
 	if method == "ExampleTest" {
 		in := args[0].(*ServerTest)
-		out := args[0].(*ServerTest)
+		out := args[1].(*ServerTest)
 		return serverTest.ExampleTest(in, out)
 	} else if method == "ExampleTestError" {
 		in := args[0].(*ServerTest)
-		out := args[0].(*ServerTest)
+		out := args[1].(*ServerTest)
 		return serverTest.ExampleTestError(in, out)
 	} else if method == "ExamplePerf" {
 		in := args[0].(*int)
-		out := args[0].(*int)
+		out := args[1].(*int)
 		return serverTest.ExamplePerf(in, out)
 	}
 	return nil
@@ -117,9 +103,9 @@ func (serverTest *ServerTest) callBack(method string, args []interface{}) error 
 
 func (serverTest *ServerTest) ExampleTest(in *ServerTest, out *ServerTest) error {
 	//log.Fatal("in = %+v", *in)
-	in.print()
+	//in.print()
 	*out = *in.clone()
-	out.print()
+	//out.print()
 	//log.Fatal("out = %+v", *out)
 	//return out, errorCode.NewErrCode(0, "ExampleTest")
 	return nil
@@ -148,7 +134,6 @@ func (serverTest *ServerTest) ExamplePerf(in *int, out *int) error {
 	return nil
 }
 
-/*
 func Test_ExampleTest_Send(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
@@ -160,7 +145,6 @@ func Test_ExampleTest_Send(t *testing.T) {
 
 	server.Stop(true)
 }
-*/
 
 func Test_ExampleTest_SendReq(t *testing.T) {
 	log.SetLevel(log.Lerr)
@@ -171,8 +155,6 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 	out := ServerTest{}
 
 	server.SendReq(func(err error) {
-		in.print()
-		out.print()
 		if in.compare(&out) == false {
 			t.Error()
 		}
@@ -185,7 +167,6 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 	server.Stop(true)
 }
 
-/*
 func Test_ExampleTest_Call(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	serverTest := NewServerTest()
@@ -223,7 +204,7 @@ func Test_ExampleTestError_Call(t *testing.T) {
 
 	server.Stop(true)
 }
-*/
+
 //go test
 
 //测试所有的文件 go test，将对当前目录下的所有*_test.go文件进行编译并自动运行测试。

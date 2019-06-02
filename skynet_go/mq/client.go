@@ -1,58 +1,172 @@
 package mq
 
 import (
+	"bytes"
+	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"net"
 	"os"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/rpc"
+	"strings"
 	"sync"
-	_ "sync/atomic"
+	"sync/atomic"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 )
 
 //==================HarborConsumer================
-type CHConsumer struct {
-	rpcServer *rpc.Server
-	conn      *Conn
-	tcpConn   *net.TCPConn
-	vector    Vector
-}
-
-func NewCHConsumer(conn *Conn) *CHConsumer {
+func NewCHConsumer(client *Client) *CHConsumer {
 	c := &CHConsumer{}
-	c.rpcServer = rpc.NewServer(c)
-	c.conn = conn
-	c.tcpConn = c.conn.GetTcpConn()
+	rpc.NewServer(c)
+	c.c = client
+	c.tcpConn = c.c.GetTcpConn()
+	c.vector = NewVector()
 	c.vector.SetConn(c.tcpConn)
+	c.Start()
 	return c
 }
 
+type CHConsumer struct {
+	rpc.ServerBase
+	c       *Client
+	tcpConn *net.TCPConn
+	vector  *Vector
+}
+
 func (c *CHConsumer) Start() {
-	c.rpcServer.Addoroutine(1)
-	c.rpcServer.Send("Read")
+	c.RPC_GetServer().Addoroutine(1)
+	c.RPC_GetServer().Send("Read")
 }
 
 func (c *CHConsumer) Read() {
 	for {
-		if c.rpcServer.IsStopping() {
+		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
 			return
 		}
 
-		msg, err := c.ReadMsg(5)
+		rMqMsg, err := c.ReadMqMsg(0)
 		if err != nil {
 			continue
 		}
-		_ = msg
+
+		if rMqMsg.GetTyp() == typRespond {
+			pendingMsgI, ok := c.c.pendingMap.Load(rMqMsg.GetPendingSeq())
+			if !ok {
+				log.Fatal("not rMqMsg.PendingSeq = %d", rMqMsg.PendingSeq)
+				continue
+			}
+			pendingMsg := pendingMsgI.(*PendingMsg)
+			if pendingMsg.typ == typCall {
+				pendingMsg.pending <- rMqMsg
+			}
+		}
+	}
+}
+
+func (c *CHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
+	n := 0
+	for {
+		if c.RPC_GetServer().IsStop() {
+			log.Fatal("rpcRead stop")
+			return nil, nil
+		}
+
+		rMqMsg, err := c.getMqMsg()
+		if err != nil {
+			return nil, err
+		}
+
+		if rMqMsg != nil {
+			return rMqMsg, nil
+		}
+
+		//获取msg 如果有返回  如果没有接收数据 超时返回错误
+		if err := c.vector.read(timeout); err != nil {
+			return nil, errorCode.NewErrCode(0, err.Error())
+		}
+		n++
+		if n > 3 {
+			return nil, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (c *CHConsumer) getMqMsgSize() int {
+	sizeByte := c.vector.Get(4)
+	if sizeByte == nil {
+		return 0
+	}
+	bytesBuffer := bytes.NewBuffer(sizeByte)
+	var size int32
+	if err := binary.Read(bytesBuffer, binary.BigEndian, &size); err != nil {
+		log.Panic(errorCode.NewErrCode(0, err.Error()))
+		return 0
+	}
+
+	if !c.vector.checkSize(int(4 + size)) {
+		return 0
+	}
+
+	c.vector.Skip(4)
+	return int(size)
+}
+
+func (c *CHConsumer) getMqMsg() (*MqMsg, error) {
+	size := c.getMqMsgSize()
+	log.Fatal("size = %d", size)
+	if size == 0 {
+		return nil, nil
+	}
+	msgByte := c.vector.Get(size)
+	if msgByte == nil {
+		return nil, nil
+	}
+
+	msg := &MqMsg{}
+	if err := proto.Unmarshal(msgByte, msg); err != nil {
+		return nil, log.Panic(errorCode.NewErrCode(0, err.Error()))
+	}
+	c.vector.Skip(size)
+	log.Fatal("msg = %+v", proto.MarshalTextString(msg))
+
+	return msg, nil
+}
+
+/*
+func (c *CHConsumer) Read() {
+	for {
+		if c.RPC_GetServer().IsStop() {
+			log.Fatal("rpcRead stop")
+			return
+		}
+
+		rMqMsg, err := c.ReadMqMsg(0)
+		if err != nil {
+			continue
+		}
+		if rMqMsg.Ty
+
+		sMqMsg := &MqMsg{}
+	sMqMsg.Typ = proto.Int32(typRespond)
+	sMqMsg.Harbor = proto.Int32(conn.harbor)
+	sMqMsg.PendingSeq = proto.Uint64(rMqMsg.PendingSeq)
+	sMqMsg.Encode = proto.Int32(encodeGob)
+	sMqMsg.Body = proto.String("")
+	conn.shConsumer.SendMqMsg(sMqMsg)
 
 	}
 }
 
-func (c *CHConsumer) ReadMsg(timeout time.Duration) (*Msg, error) {
+func (c *CHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
 	for {
-		if c.rpcServer.IsStopping() {
+		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
 			return nil, nil
 		}
@@ -62,37 +176,56 @@ func (c *CHConsumer) ReadMsg(timeout time.Duration) (*Msg, error) {
 
 	return nil, nil
 }
-
-//=====================HarborProducer===============
-type CHProducer struct {
-	rpcServer *rpc.Server
-	conn      *Conn
-	tcpConn   *net.TCPConn
-}
-
-func NewCHProducer(conn *Conn) *CHProducer {
+*/
+//=====================NewCHProducer===============
+func NewCHProducer(c *Client) *CHProducer {
 	p := &CHProducer{}
-	p.rpcServer = rpc.NewServer(p)
-	p.conn = conn
-	p.tcpConn = p.conn.GetTcpConn()
-	//sendList
-	//waitList
+	rpc.NewServer(p)
+	p.c = c
+	p.GetTcpConn()
 	return p
 }
 
-func (c *CHProducer) Start() {
-	c.rpcServer.Addoroutine(1)
-	c.rpcServer.Send("Write")
+type CHProducer struct {
+	rpc.ServerBase
+	c       *Client
+	tcpConn *net.TCPConn
 }
 
-func (p *CHProducer) SendMsg() {
+func (p *CHProducer) GetTcpConn() {
+	if p.tcpConn == nil {
+		p.tcpConn = p.c.GetTcpConn()
+	}
 }
 
-func (p *CHProducer) Send() {
+func (p *CHProducer) SendMqMsg(m *MqMsg) {
+	log.Fatal("msg = %+v", proto.MarshalTextString(m))
+	mb, err := proto.Marshal(m)
+	if err != nil {
+		log.Panic(errorCode.NewErrCode(0, err.Error()))
+	}
+	// if false {
+	// 	mqMsg2 := MqMsg{}
+	// 	proto.Unmarshal(mqMsgByte, &mqMsg2)
+	// 	log.Fatal("mqMsg2 = %+v", mqMsg2)
+	// 	log.Fatal("mqMsg2 = %+v", proto.MarshalTextString(&mqMsg2))
+
+	// }
+	p.Write(mb)
+
 }
 
-func (p *CHProducer) Write() {
-	//return c.conn.Write(b)
+func (p *CHProducer) WriteSize(size int) {
+	log.Fatal("size = %d", size)
+	s := int32(size)
+	bytesBuffer := bytes.NewBuffer([]byte{})
+	binary.Write(bytesBuffer, binary.BigEndian, s)
+	p.tcpConn.Write(bytesBuffer.Bytes())
+}
+
+func (p *CHProducer) Write(b []byte) {
+	p.WriteSize(len(b))
+	p.tcpConn.Write(b)
 }
 
 const (
@@ -100,34 +233,85 @@ const (
 	Proto
 )
 
+//=====================Msg
+
 type Msg struct {
-	Topic string //模块名
-	Tag   string //分标识
-	Order uint64 //有序消息
-	Code  int
+	Topic  string //模块名
+	Tag    string //分标识
+	Order  uint64 //有序消息
+	encode int32
+}
+
+type CallBack func(error)
+type PendingMsg struct {
+	typ        int32  //Send SendReq Call CallReq
+	topic      string //模块名
+	tag        string //分标识
+	order      uint64 //有序消息
+	class      string //远端对象名字
+	method     string //远端对象的方法
+	pendingSeq uint64 //回调seq
+	reqEncode  int32  //编码 gob  proto
+	reqBody    string //数据包
+	resEncode  int32  //编码 gob  proto
+	resBody    string //数据包
+	callBack   CallBack
+	pending    chan interface{}
+}
+
+func (p *PendingMsg) Init() {
+
+}
+
+//=====================Client
+func NewClient(instance string, address string) *Client {
+	c := &Client{}
+	rpc.NewServer(c)
+	c.address = address
+	c.pendingSeq = 0
+	c.instance = c.GetInstance(instance)
+	c.pendingMsgPool = &sync.Pool{New: func() interface{} {
+		msg := &PendingMsg{}
+		msg.pending = make(chan interface{}, 1)
+		return msg
+	},
+	}
+
+	if err := c.DialConn(); err != nil {
+		return nil
+	}
+
+	c.chProducer = NewCHProducer(c)
+	c.chConsumer = NewCHConsumer(c)
+	if err := c.Register(); err != nil {
+		return nil
+	}
+	return c
 }
 
 type Client struct {
-	rpcServer *rpc.Server
-	address   string
-	mutex     sync.Mutex
-	tcpConn   *net.TCPConn
-	harbor    int32
-	instance  string //xx_ip_$$ (模块名)_(ip)_(进程id)
-
+	rpc.ServerBase
+	address        string
+	mutex          sync.Mutex
+	tcpConn        *net.TCPConn
+	harbor         int32
+	instance       string //xx_ip_$$ (模块名)_(ip)_(进程id)
+	pendingSeq     uint64
+	pendingMap     sync.Map
+	pendingMsgPool *sync.Pool
+	chProducer     *CHProducer
+	chConsumer     *CHConsumer
 }
 
-func NewClient(instance string, address string) *Client {
-	c := &Client{}
-	c.rpcServer = rpc.NewServer(c)
-	c.address = address
-	pid := os.Getpid()
-	//addr := strings.Split(c.tcpConn.LocalAddr().String(), ":")[0]
-	addr := c.getIP()
-	c.instance = fmt.Sprintf("%s_%s_%d", instance, addr, pid)
-	log.Fatal("instance = %s", c.instance)
-	c.getConn()
-	return c
+func (c *Client) GetInstance(instance string) string {
+	if len(c.instance) < 1 {
+		pid := os.Getpid()
+		//addr := strings.Split(c.tcpConn.LocalAddr().String(), ":")[0]
+		addr := c.getIP()
+		c.instance = fmt.Sprintf("%s_%s_%d", instance, addr, pid)
+		log.Fatal("instance = %s", c.instance)
+	}
+	return c.instance
 }
 
 func (c *Client) getIP() string {
@@ -136,12 +320,11 @@ func (c *Client) getIP() string {
 		log.Panic(errorCode.NewErrCode(0, err.Error()))
 		return ""
 	}
-	//log.Fatal("len(addrs) = %d", len(addrs))
+
 	for _, address := range addrs {
 		// 检查ip地址判断是否回环地址
 		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 			if ipnet.IP.To4() != nil {
-				//log.Fatal("ip = %s", ipnet.IP.String())
 				return ipnet.IP.String()
 			}
 		}
@@ -149,35 +332,98 @@ func (c *Client) getIP() string {
 	return ""
 }
 
-func (c *Client) getConn() {
+func (c *Client) DialConn() error {
 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
 	if tcpAddrErr != nil {
-		log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
-		return
+		return log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
 	}
+
 	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
 	if tcpConnErr != nil {
-		log.ErrorCode(errorCode.NewErrCode(0, tcpConnErr.Error()))
-		return
+		return log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
 	}
 
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 	c.tcpConn = tcpConn
-}
-
-func (c *Client) Register() {
-
-}
-
-func (c *Client) Send(msg *Msg, method string, args interface{}) error {
 	return nil
 }
 
-func (c *Client) SendReq(msg *Msg, method string, args interface{}, reply interface{}, replyFunc interface{}) error {
+func (c *Client) GetTcpConn() *net.TCPConn {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+	return c.tcpConn
+}
+
+func (c *Client) Register() error {
+	request := RegisteRequest{c.instance}
+	reply := RegisterReply{}
+	msg := Msg{Topic: "Mq", Tag: "*"}
+	if err := c.Call(&msg, "Mq.OnRegister", &request, &reply); err != nil {
+		return errorCode.NewErrCode(0, err.Error())
+	}
+	c.harbor = reply.Harbor
 	return nil
 }
 
-func (c *Client) Call(msg *Msg, method string, args interface{}, reply interface{}) error {
+// func (c *Client) Send(msg *Msg, method string, request interface{}) error {
+// 	return nil
+// }
+
+// func (c *Client) SendReq(msg *Msg, method string, request interface{}, reply interface{}, callBack CallBack) {
+
+// 	callBack(errorCode.NewErrCode(0, "test"))
+// 	return nil
+// }
+
+func (c *Client) Call(msg *Msg, method string, request interface{}, reply interface{}) error {
+	methods := strings.Split(method, ".")
+	p := c.pendingMsgPool.Get().(*PendingMsg)
+	p.typ = typCall
+	p.topic = msg.Topic
+	p.tag = msg.Tag
+	p.order = msg.Order
+	p.class = methods[0]
+	p.method = methods[1]
+	p.pendingSeq = atomic.AddUint64(&c.pendingSeq, 1)
+	p.reqEncode = msg.encode
+
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	enc.Encode(request)
+	p.reqBody = buf.String()
+
+	c.pendingMap.Store(p.pendingSeq, p)
+
+	sMqMsg := &MqMsg{}
+	sMqMsg.Typ = proto.Int32(p.typ)
+	sMqMsg.Harbor = proto.Int32(c.harbor)
+	sMqMsg.Instance = proto.String(c.instance)
+	sMqMsg.Topic = proto.String(p.topic)
+	sMqMsg.Tag = proto.String(p.tag)
+	sMqMsg.Order = proto.Uint64(p.order)
+	sMqMsg.Class = proto.String(p.class)
+	sMqMsg.Method = proto.String(p.method)
+	sMqMsg.PendingSeq = proto.Uint64(p.pendingSeq)
+	sMqMsg.Encode = proto.Int32(p.reqEncode)
+	sMqMsg.Body = proto.String(p.reqBody)
+
+	c.chProducer.RPC_GetServer().Send("SendMqMsg", sMqMsg)
+	rMqMsgI := <-p.pending
+	rMqMsg := rMqMsgI.(*MqMsg)
+	c.harbor = rMqMsg.GetHarbor()
+	log.Fatal("c.harbor = %d", c.harbor)
+
+	// mqMsgByte, err := proto.Marshal(&sMqMsg)
+	// if err != nil {
+	// 	return log.Panic(errorCode.NewErrCode(0, err.Error()))
+	// }
+	// if true {
+	// 	mqMsg2 := MqMsg{}
+	// 	proto.Unmarshal(mqMsgByte, &mqMsg2)
+	// 	log.Fatal("mqMsg2 = %+v", mqMsg2)
+	// 	log.Fatal("mqMsg2 = %+v", proto.MarshalTextString(&mqMsg2))
+
+	// }
 	return nil
 }

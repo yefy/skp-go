@@ -78,13 +78,6 @@ func NewServerTest() *ServerTest {
 	return serverTest
 }
 
-func (serverTest *ServerTest) RPC_Server(server *Server) {
-
-}
-func (serverTest *ServerTest) RPC_Close() {
-
-}
-
 func (serverTest *ServerTest) ExampleTest(in *ServerTest, out *ServerTest) (*ServerTest, error) {
 	log.All("in = %+v", in)
 	*out = *in.clone()
