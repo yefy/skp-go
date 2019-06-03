@@ -283,9 +283,6 @@ func NewClient(instance string, address string) *Client {
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
-	if err := c.Register(); err != nil {
-		return nil
-	}
 	return c
 }
 
@@ -301,6 +298,20 @@ type Client struct {
 	pendingMsgPool *sync.Pool
 	chProducer     *CHProducer
 	chConsumer     *CHConsumer
+	topic          string
+	tag            string
+}
+
+func (c *Client) Subscribe(topic string, tag string) {
+	c.topic = topic
+	c.tag = tag
+}
+
+func (c *Client) Start() error {
+	if err := c.Register(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Client) GetInstance(instance string) string {
@@ -356,13 +367,19 @@ func (c *Client) GetTcpConn() *net.TCPConn {
 }
 
 func (c *Client) Register() error {
-	request := RegisteRequest{c.instance}
+	request := RegisteRequest{}
+	request.Instance = c.instance
+	request.Harbor = c.harbor
+	request.Topic = c.topic
+	request.Tag = c.tag
 	reply := RegisterReply{}
 	msg := Msg{Topic: "Mq", Tag: "*"}
 	if err := c.Call(&msg, "Mq.OnRegister", &request, &reply); err != nil {
 		return errorCode.NewErrCode(0, err.Error())
 	}
 	c.harbor = reply.Harbor
+
+	log.Fatal("c.harbor = %d", c.harbor)
 	return nil
 }
 
@@ -388,17 +405,18 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	p.pendingSeq = atomic.AddUint64(&c.pendingSeq, 1)
 	p.reqEncode = msg.encode
 
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	log.Fatal("request = %+v", request)
+
+	var sBuf bytes.Buffer
+	enc := gob.NewEncoder(&sBuf)
 	enc.Encode(request)
-	p.reqBody = buf.String()
+	p.reqBody = sBuf.String()
 
 	c.pendingMap.Store(p.pendingSeq, p)
 
 	sMqMsg := &MqMsg{}
 	sMqMsg.Typ = proto.Int32(p.typ)
 	sMqMsg.Harbor = proto.Int32(c.harbor)
-	sMqMsg.Instance = proto.String(c.instance)
 	sMqMsg.Topic = proto.String(p.topic)
 	sMqMsg.Tag = proto.String(p.tag)
 	sMqMsg.Order = proto.Uint64(p.order)
@@ -411,8 +429,13 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	c.chProducer.RPC_GetServer().Send("SendMqMsg", sMqMsg)
 	rMqMsgI := <-p.pending
 	rMqMsg := rMqMsgI.(*MqMsg)
-	c.harbor = rMqMsg.GetHarbor()
-	log.Fatal("c.harbor = %d", c.harbor)
+
+	var rBuf bytes.Buffer
+	rBuf.WriteString(rMqMsg.GetBody())
+	dec := gob.NewDecoder(&rBuf)
+	dec.Decode(reply)
+
+	log.Fatal("reply = %+v", reply)
 
 	// mqMsgByte, err := proto.Marshal(&sMqMsg)
 	// if err != nil {

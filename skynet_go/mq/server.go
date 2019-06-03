@@ -3,6 +3,7 @@ package mq
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
@@ -292,6 +293,7 @@ func NewTopicConns() *TopicConns {
 func NewServer() *Server {
 	s := &Server{}
 	rpc.NewServer(s)
+	s.topicConnsMap = make(map[string]*TopicConns)
 	return s
 }
 
@@ -302,8 +304,8 @@ type Server struct {
 	//instanceConn map[string]*Conn
 	instanceConn sync.Map
 	//harborConn   map[int32]*Conn
-	harborConn sync.Map
-	topicConns map[string]*TopicConns
+	harborConn    sync.Map
+	topicConnsMap map[string]*TopicConns
 }
 
 func (s *Server) Listen(address string) error {
@@ -347,28 +349,39 @@ func (s *Server) Close() {
 }
 
 func (s *Server) OnRegister(tcpConn *net.TCPConn) {
-
 	newConn := NewConn(s, tcpConn, atomic.AddInt32(&s.harbor, 1))
 	rMqMsg, rMqMsgErr := newConn.shConsumer.ReadMqMsg(2)
 	if rMqMsgErr != nil {
 		newConn.tcpConn.Close()
 		return
 	}
+
+	request := RegisteRequest{}
+	var rBuf bytes.Buffer
+	rBuf.WriteString(rMqMsg.GetBody())
+	dec := gob.NewDecoder(&rBuf)
+	dec.Decode(&request)
+
+	log.Fatal("request = %+v", request)
+
 	if rMqMsg.GetClass() != "Mq" ||
 		rMqMsg.GetMethod() != "OnRegister" ||
-		rMqMsg.GetInstance() == "" {
+		request.Instance == "" {
 		log.Err("rMqMsg.Class != Mq || rMqMsg.Method != Register, rMqMsg = %+v", rMqMsg)
 		newConn.tcpConn.Close()
 		return
 	}
-	newConn.instance = rMqMsg.GetInstance()
+	newConn.instance = request.Instance
+	if request.Harbor > 0 {
+		newConn.harbor = request.Harbor
+	}
 
 	connI, connOk := s.instanceConn.LoadOrStore(newConn.instance, newConn)
 	log.Fatal("connI = %+v, connOk = %+v", connI, connOk)
 	conn := connI.(*Conn)
 	if connOk {
-		if rMqMsg.GetHarbor() != conn.harbor {
-			log.Err("rMqMsg.Harbor != conn.Harbor, rMqMsg.Harbor = %+v, oldConn.Harbor = %+v", rMqMsg.Harbor, conn.harbor)
+		if newConn.harbor != conn.harbor {
+			log.Err("newConn.harbor != conn.Harbor, newConn.harbor = %+v, oldConn.Harbor = %+v", newConn.harbor, conn.harbor)
 			conn.tcpConn.Close()
 		} else {
 			conn.SetTcpConn(newConn.tcpConn)
@@ -378,13 +391,28 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 		//conn.Start()
 	}
 
+	topicConns := s.topicConnsMap[conn.topic]
+	if topicConns == nil {
+		topicConns = NewTopicConns()
+		topicConns.harborConn[conn.harbor] = conn
+		s.topicConnsMap[conn.topic] = topicConns
+	} else {
+
+	}
+
+	reply := RegisterReply{}
+	reply.Harbor = conn.harbor
+
+	var sBuf bytes.Buffer
+	enc := gob.NewEncoder(&sBuf)
+	enc.Encode(&reply)
+
 	sMqMsg := &MqMsg{}
 	sMqMsg.Typ = proto.Int32(typRespond)
 	sMqMsg.Harbor = proto.Int32(conn.harbor)
 	sMqMsg.PendingSeq = proto.Uint64(rMqMsg.GetPendingSeq())
 	sMqMsg.Encode = proto.Int32(encodeGob)
-	sMqMsg.Body = proto.String("")
-	sMqMsg.Instance = proto.String("")
+	sMqMsg.Body = proto.String(sBuf.String())
 	sMqMsg.Topic = proto.String("")
 	sMqMsg.Tag = proto.String("")
 	sMqMsg.Order = proto.Uint64(0)

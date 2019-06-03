@@ -4,13 +4,14 @@ package mq;
 message MqMsg  {
 	required int32 Typ 	= 1;        //Send SendReq Call CallReq
 	required int32 Harbor    = 2;    //harbor 全局唯一的id  对应instance
-	required string Instance= 3;    //xx_ip_$$ (模块名)_(ip)_(进程id)
-	required string Topic= 4;       //模块名
-	required string Tag   = 5;      //分标识
-	required uint64 Order = 6;      //有序消息
-	required string Class  = 7;     //远端对象名字
-	required string Method  = 8;    //远端对象的方法
-	required uint64 PendingSeq= 9;  //回调seq
-	required int32 encode  = 10;  //编码 gob  proto
-	required string Body    = 11;    //数据包
+	required string Topic= 3;       //模块名
+	required string Tag   = 4;      //分标识
+	required uint64 Order = 5;      //有序消息
+	required string Class  = 6;     //远端对象名字
+	required string Method  = 7;    //远端对象的方法
+	required uint64 PendingSeq= 8;  //回调seq
+	required int32 encode  = 9;  //编码 gob  proto
+	required string Body    = 10;    //数据包
 }
+
+//required string Instance= 3;    //xx_ip_$$ (模块名)_(ip)_(进程id)

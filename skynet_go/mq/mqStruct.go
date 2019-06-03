@@ -2,6 +2,9 @@ package mq
 
 type RegisteRequest struct {
 	Instance string
+	Harbor   int32
+	Topic    string
+	Tag      string
 }
 
 type RegisterReply struct {
