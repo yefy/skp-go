@@ -74,6 +74,7 @@ type Server struct {
 	recvNumber      int32
 	state           int32
 	waitMsg         int32
+	mutex           sync.Mutex
 }
 
 func NewServer(obj ServerInterface) *Server {
@@ -91,7 +92,7 @@ func NewServer(obj ServerInterface) *Server {
 
 	obj.RPC_SetServer(server)
 
-	server.Start()
+	server.Start(true)
 
 	return server
 }
@@ -109,14 +110,23 @@ func (server *Server) Addoroutine(num int) {
 	}
 }
 
-func (server *Server) Start() {
+func (server *Server) Start(isNewCache bool) {
+	defer server.mutex.Unlock()
+	server.mutex.Lock()
+
 	if server.state == stateStop {
 		server.goroutineNumber = 0
 		server.sendNumber = 0
 		server.recvNumber = 0
 		server.state = stateStart
 		server.waitMsg = 1
-		server.cache = make(chan interface{}, server.cacheNumber)
+		if isNewCache {
+			server.cache = make(chan interface{}, server.cacheNumber)
+		}
+
+		if server.cache == nil {
+			server.cache = make(chan interface{}, server.cacheNumber)
+		}
 		server.waitGroup = &sync.WaitGroup{}
 		server.ctx, server.cancel = context.WithCancel(context.Background())
 		server.Addoroutine(1)
@@ -130,6 +140,9 @@ func (server *Server) SendStop(waitMsg bool) {
 }
 
 func (server *Server) Stop(waitMsg bool) {
+	defer server.mutex.Unlock()
+	server.mutex.Lock()
+
 	if server.state == stateStart {
 		server.state = stateStopping
 		if waitMsg {
@@ -142,6 +155,10 @@ func (server *Server) Stop(waitMsg bool) {
 		server.state = stateStop
 		server.service.RPC_Close()
 	}
+}
+
+func (server *Server) IsStart() bool {
+	return atomic.LoadInt32(&server.state) == stateStart
 }
 
 func (server *Server) IsStop() bool {

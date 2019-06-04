@@ -28,6 +28,7 @@ func (v *Vector) read(timeout time.Duration) error {
 	if timeout > 0 {
 		v.tcpConn.SetReadDeadline(time.Now().Add(timeout * time.Second))
 	}
+
 	size, err := v.tcpConn.Read(v.connBuffer)
 	if err != nil {
 		return err

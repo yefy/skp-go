@@ -9,6 +9,7 @@ import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpcdp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,11 +52,11 @@ func (q *Queue) Write() {
 //==================SHConsumer================
 func NewSHConsumer(conn *Conn) *SHConsumer {
 	c := &SHConsumer{}
-	rpc.NewServer(c)
 	c.conn = conn
 	c.tcpConn = c.conn.GetTcpConn()
 	c.vector = NewVector()
 	c.vector.SetConn(c.tcpConn)
+	rpc.NewServer(c)
 	return c
 }
 
@@ -67,11 +68,18 @@ type SHConsumer struct {
 }
 
 func (c *SHConsumer) Start() {
+	c.Stop(true)
+	c.RPC_GetServer().Start()
 	c.RPC_GetServer().Addoroutine(1)
 	c.RPC_GetServer().Send("Read")
 }
 
+func (c *SHConsumer) Stop() {
+	c.RPC_GetServer().Stop(true)
+}
+
 func (c *SHConsumer) Read() {
+	defer c.RPC_GetServer().SendStop(true)
 	for {
 		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
@@ -80,15 +88,15 @@ func (c *SHConsumer) Read() {
 
 		msg, err := c.ReadMqMsg(0)
 		if err != nil {
-			continue
+			return
 		}
-		_ = msg
+		log.Fatal("msg = %+v", msg)
 
 	}
 }
 
 func (c *SHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
-	n := 0
+
 	for {
 		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
@@ -108,33 +116,10 @@ func (c *SHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
 		if err := c.vector.read(timeout); err != nil {
 			return nil, errorCode.NewErrCode(0, err.Error())
 		}
-		n++
-		if n > 3 {
-			return nil, nil
-		}
 	}
 
 	return nil, nil
 }
-
-// //整形转换成字节
-// func IntToBytes(n int) []byte {
-//     x := int32(n)
-
-//     bytesBuffer := bytes.NewBuffer([]byte{})
-//     binary.Write(bytesBuffer, binary.BigEndian, x)
-//     return bytesBuffer.Bytes()
-// }
-
-// //字节转换成整形
-// func BytesToInt(b []byte) int {
-//     bytesBuffer := bytes.NewBuffer(b)
-
-//     var x int32
-//     binary.Read(bytesBuffer, binary.BigEndian, &x)
-
-//     return int(x)
-// }
 
 func (c *SHConsumer) getMqMsgSize() int {
 	sizeByte := c.vector.Get(4)
@@ -193,6 +178,15 @@ type SHProducer struct {
 	tcpConn *net.TCPConn
 }
 
+func (p *SHProducer) Start() {
+	p.RPC_GetServer().Stop(false)
+	p.RPC_GetServer().Start()
+}
+
+func (p *SHProducer) Stop() {
+	p.RPC_GetServer().Stop(false)
+}
+
 func (p *SHProducer) RPC_Dispath(method string, args []interface{}) error {
 	m := args[0].(*MqMsg)
 	log.Fatal("msg = %+v", proto.MarshalTextString(m))
@@ -207,7 +201,9 @@ func (p *SHProducer) RPC_Dispath(method string, args []interface{}) error {
 	// 	log.Fatal("mqMsg2 = %+v", proto.MarshalTextString(&mqMsg2))
 
 	// }
-	p.Write(mb)
+	if err := p.Write(mb); err != nil {
+		p.RPC_GetServer().SendStop(false)
+	}
 	return nil
 }
 
@@ -215,17 +211,25 @@ func (p *SHProducer) SendMqMsg(m *MqMsg) {
 	p.RPC_GetServer().Send("Write", m)
 }
 
-func (p *SHProducer) WriteSize(size int) {
+func (p *SHProducer) WriteSize(size int) error {
 	log.Fatal("size = %d", size)
 	s := int32(size)
 	bytesBuffer := bytes.NewBuffer([]byte{})
 	binary.Write(bytesBuffer, binary.BigEndian, s)
-	p.tcpConn.Write(bytesBuffer.Bytes())
+	if _, err := p.tcpConn.Write(bytesBuffer.Bytes()); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (p *SHProducer) Write(b []byte) {
-	p.WriteSize(len(b))
-	p.tcpConn.Write(b)
+func (p *SHProducer) Write(b []byte) error {
+	if err := p.WriteSize(len(b)); err != nil {
+		return err
+	}
+	if _, err := p.tcpConn.Write(b); err != nil {
+		return err
+	}
+	return nil
 }
 
 //======================Conn================
@@ -246,12 +250,47 @@ type Conn struct {
 	mutex    sync.Mutex
 	tcpConn  *net.TCPConn
 
-	topic    string
-	tag      string
-	topicTag map[string]bool
+	topic  string
+	tag    string
+	tags   []string
+	tagMap map[string]bool
 
 	shConsumer *SHConsumer
 	shProducer *SHProducer
+}
+
+func (c *Conn) Start() {
+	c.shConsumer.Start()
+	c.shProducer.Start()
+}
+
+func (c *Conn) Stop() {
+	c.shConsumer.Stop()
+	c.shProducer.Stop()
+}
+
+func (c *Conn) Subscribe(topic string, tag string) {
+	c.topic = strings.Trim(topic, "\t\n ")
+	c.tag = strings.Trim(tag, "\t\n ")
+	if c.tag == "*" {
+		return
+	}
+
+	c.tags = strings.Split(c.tag, "||")
+	for _, v := range c.tags {
+		c.tagMap[v] = true
+	}
+}
+
+func (c *Conn) IsSubscribeAll() true {
+	if c.tag == "*" {
+		return true
+	}
+
+	false
+}
+
+func (c *Conn) GetSubscribe(topic string, tag string) {
 }
 
 func (c *Conn) GetTcpConn() *net.TCPConn {
@@ -264,10 +303,6 @@ func (c *Conn) SetTcpConn(tcpconn *net.TCPConn) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 	c.tcpConn = tcpconn
-}
-
-func (c *Conn) Start() {
-	c.shConsumer.Start()
 }
 
 // func (c *Conn) Stop() {
@@ -375,6 +410,7 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 	if request.Harbor > 0 {
 		newConn.harbor = request.Harbor
 	}
+	newConn.Subscribe(request.Topic, request.Tag)
 
 	connI, connOk := s.instanceConn.LoadOrStore(newConn.instance, newConn)
 	log.Fatal("connI = %+v, connOk = %+v", connI, connOk)
@@ -384,19 +420,30 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 			log.Err("newConn.harbor != conn.Harbor, newConn.harbor = %+v, oldConn.Harbor = %+v", newConn.harbor, conn.harbor)
 			conn.tcpConn.Close()
 		} else {
+			conn.Stop()
 			conn.SetTcpConn(newConn.tcpConn)
+			conn.Start()
 		}
 	} else {
 		s.harborConn.Store(newConn.harbor, newConn)
-		//conn.Start()
-	}
 
-	topicConns := s.topicConnsMap[conn.topic]
-	if topicConns == nil {
-		topicConns = NewTopicConns()
-		topicConns.harborConn[conn.harbor] = conn
-		s.topicConnsMap[conn.topic] = topicConns
-	} else {
+		if conn.topic == "" && request.Topic != "" && request.Tag != "" {
+			topicConns := s.topicConnsMap[conn.topic]
+			if topicConns == nil {
+				topicConns = NewTopicConns()
+				s.topicConnsMap[conn.topic] = topicConns
+			}
+
+			if conn.IsSubscribeAll() {
+				//topicConnsMap all conn  close
+			} else {
+				//关闭一样的tag conn
+			}
+
+			topicConns.harborConn[conn.harbor] = conn
+		}
+
+		conn.Start()
 
 	}
 
