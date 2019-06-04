@@ -873,3 +873,5 @@
 2019/06/02 17:40:38.547443 | main.go:126 | main.main | 1 | fatal | k = 1, v = 111aaa
 2019/06/02 17:40:38.547443 | main.go:126 | main.main | 1 | fatal | k = 2, v = 222bbb
 2019/06/02 17:40:38.547600 | main.go:129 | main.main | 1 | fatal | outGTest = {N1:1 N2:2 Str1:111 Str2:222 StrP1:0xc042035610 StrP2:0xc042035620 Byte1:[49 50 51 52] Map1:map[2:222 1:111] MapP1:0xc0420047d0}
+2019/06/04 17:25:17.824186 | main.go:9 | main.main | 1 |   all | main start
+2019/06/04 17:27:24.598051 | main.go:9 | main.main | 1 |   all | main start
