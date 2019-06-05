@@ -8,12 +8,21 @@ import (
 	"time"
 )
 
+const (
+	Unknown = iota
+	TimeOut
+)
+
 type ErrCode struct {
 	server string
 	code   int
 	msg    string
 	where  string
 	stack  string
+}
+
+func (e *ErrCode) Code() int {
+	return e.code
 }
 
 func (e *ErrCode) Error() string {

@@ -51,7 +51,7 @@ func (c *CHConsumer) Read() {
 
 		rMqMsg, err := c.ReadMqMsg(0)
 		if err != nil {
-			continue
+			return
 		}
 
 		if rMqMsg.GetTyp() == typRespond {
@@ -69,7 +69,6 @@ func (c *CHConsumer) Read() {
 }
 
 func (c *CHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
-	n := 0
 	for {
 		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
@@ -86,12 +85,9 @@ func (c *CHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
 		}
 
 		//获取msg 如果有返回  如果没有接收数据 超时返回错误
+		log.Fatal("c.vector.read(timeout) timeout = %d", timeout)
 		if err := c.vector.read(timeout); err != nil {
 			return nil, errorCode.NewErrCode(0, err.Error())
-		}
-		n++
-		if n > 3 {
-			return nil, nil
 		}
 	}
 
@@ -120,7 +116,7 @@ func (c *CHConsumer) getMqMsgSize() int {
 
 func (c *CHConsumer) getMqMsg() (*MqMsg, error) {
 	size := c.getMqMsgSize()
-	log.Fatal("size = %d", size)
+	log.Fatal("CHConsumer size = %d", size)
 	if size == 0 {
 		return nil, nil
 	}
@@ -211,6 +207,7 @@ func (p *CHProducer) SendMqMsg(m *MqMsg) {
 	// 	log.Fatal("mqMsg2 = %+v", proto.MarshalTextString(&mqMsg2))
 
 	// }
+
 	p.Write(mb)
 
 }

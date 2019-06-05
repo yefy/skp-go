@@ -17,36 +17,36 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-// type MqMsg struct {
-// 	Typ        string //Send SendReq Call CallReq
-// 	Harbor     int32  //harbor 全局唯一的id  对应instance
-// 	Instance   string //xx_ip_$$ (模块名)_(ip)_(进程id)
-// 	Topic      string //模块名
-// 	Tag        string //分标识
-// 	Order      uint64 //有序消息
-// 	Class      string //远端对象名字
-// 	Method     string //远端对象的方法
-// 	PendingSeq uint64 //回调seq
-// 	BodyType   string //编码 gob  proto
-// 	Body       string //数据包
-// }
-
-func NewMqMsg() *MqMsg {
-	return nil
+func NewQueue(server *Server, topic string, tag string) *Queue {
+	q := &Queue{}
+	q.topic = topic
+	q.tag = tag
+	q.key = q.topic + "_" + q.tag
+	q.server = server
+	var conn *Conn
+	topicConns := q.server.topicConnsMap[q.topic]
+	if topicConns != nil {
+		log.Fatal("topicConns != nil")
+		for _, v := range topicConns.harborConn {
+			if v.IsSubscribe(q.tag) {
+				log.Fatal("conn = v")
+				conn = v
+			}
+		}
+	} else {
+		log.Fatal("topicConns == nil")
+		conn = nil
+	}
+	q.shProducer = NewSHProducer(conn)
+	return q
 }
 
 type Queue struct {
-	list     string
-	backList string
-	conn     *Conn
-}
-
-func NewQueue() *Queue {
-	return nil
-}
-
-func (q *Queue) Write() {
-
+	topic      string
+	tag        string
+	key        string
+	server     *Server
+	shProducer *SHProducer
 }
 
 //==================SHConsumer================
@@ -68,8 +68,8 @@ type SHConsumer struct {
 }
 
 func (c *SHConsumer) Start() {
-	c.Stop(true)
-	c.RPC_GetServer().Start()
+	c.RPC_GetServer().Stop(true)
+	c.RPC_GetServer().Start(false)
 	c.RPC_GetServer().Addoroutine(1)
 	c.RPC_GetServer().Send("Read")
 }
@@ -86,17 +86,42 @@ func (c *SHConsumer) Read() {
 			return
 		}
 
-		msg, err := c.ReadMqMsg(0)
+		mqMsg, err := c.ReadMqMsg(5)
 		if err != nil {
-			return
+			errCode := err.(*errorCode.ErrCode)
+			if errCode.Code() != errorCode.TimeOut {
+				return
+			}
 		}
-		log.Fatal("msg = %+v", msg)
+
+		if mqMsg == nil {
+			continue
+		}
+
+		if mqMsg.GetTyp() == typRespond {
+			harbor := mqMsg.GetHarbor()
+			harborConnI, ok := c.conn.server.harborConn.Load(harbor)
+			if ok {
+				harborConn := harborConnI.(*Conn)
+				harborConn.shProducer.SendMqMsg(mqMsg)
+			} else {
+				log.Fatal("not harbor = %d", harbor)
+			}
+		} else {
+			key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
+			queue := c.conn.server.topicTag[key]
+			if queue == nil {
+				log.Fatal("queue == nil")
+				queue = NewQueue(c.conn.server, mqMsg.GetTopic(), mqMsg.GetTag())
+				c.conn.server.topicTag[key] = queue
+			}
+			queue.shProducer.SendMqMsg(mqMsg)
+		}
 
 	}
 }
 
 func (c *SHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
-
 	for {
 		if c.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
@@ -112,38 +137,39 @@ func (c *SHConsumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
 			return rMqMsg, nil
 		}
 
-		//获取msg 如果有返回  如果没有接收数据 超时返回错误
 		if err := c.vector.read(timeout); err != nil {
-			return nil, errorCode.NewErrCode(0, err.Error())
+			return nil, err
 		}
 	}
 
 	return nil, nil
 }
 
-func (c *SHConsumer) getMqMsgSize() int {
+func (c *SHConsumer) getMqMsgSize() (int, error) {
 	sizeByte := c.vector.Get(4)
 	if sizeByte == nil {
-		return 0
+		return 0, nil
 	}
 	bytesBuffer := bytes.NewBuffer(sizeByte)
 	var size int32
 	if err := binary.Read(bytesBuffer, binary.BigEndian, &size); err != nil {
-		log.Panic(errorCode.NewErrCode(0, err.Error()))
-		return 0
+		return 0, log.ErrorCode(errorCode.NewErrCode(errorCode.Unknown, err.Error()))
 	}
 
 	if !c.vector.checkSize(int(4 + size)) {
-		return 0
+		return 0, nil
 	}
 
 	c.vector.Skip(4)
-	return int(size)
+	return int(size), nil
 }
 
 func (c *SHConsumer) getMqMsg() (*MqMsg, error) {
-	size := c.getMqMsgSize()
-	log.Fatal("size = %d", size)
+	size, err := c.getMqMsgSize()
+	if err != nil {
+		return nil, err
+	}
+
 	if size == 0 {
 		return nil, nil
 	}
@@ -158,7 +184,6 @@ func (c *SHConsumer) getMqMsg() (*MqMsg, error) {
 	}
 	c.vector.Skip(size)
 	log.Fatal("msg = %+v", proto.MarshalTextString(msg))
-
 	return msg, nil
 }
 
@@ -167,8 +192,10 @@ func (c *SHConsumer) getMqMsg() (*MqMsg, error) {
 func NewSHProducer(conn *Conn) *SHProducer {
 	p := &SHProducer{}
 	rpcdp.NewServer(p)
-	p.conn = conn
-	p.tcpConn = p.conn.GetTcpConn()
+	if conn != nil {
+		p.conn = conn
+		p.tcpConn = p.conn.GetTcpConn()
+	}
 	return p
 }
 
@@ -180,7 +207,7 @@ type SHProducer struct {
 
 func (p *SHProducer) Start() {
 	p.RPC_GetServer().Stop(false)
-	p.RPC_GetServer().Start()
+	p.RPC_GetServer().Start(false)
 }
 
 func (p *SHProducer) Stop() {
@@ -282,15 +309,25 @@ func (c *Conn) Subscribe(topic string, tag string) {
 	}
 }
 
-func (c *Conn) IsSubscribeAll() true {
+func (c *Conn) IsSubscribe(tag string) bool {
+	log.Fatal("IsSubscribe tag = %s", tag)
 	if c.tag == "*" {
 		return true
 	}
 
-	false
+	if c.tagMap[tag] {
+		return true
+	}
+
+	return false
 }
 
-func (c *Conn) GetSubscribe(topic string, tag string) {
+func (c *Conn) IsSubscribeAll() bool {
+	if c.tag == "*" {
+		return true
+	}
+
+	return false
 }
 
 func (c *Conn) GetTcpConn() *net.TCPConn {
@@ -329,6 +366,7 @@ func NewServer() *Server {
 	s := &Server{}
 	rpc.NewServer(s)
 	s.topicConnsMap = make(map[string]*TopicConns)
+	s.topicTag = make(map[string]*Queue)
 	return s
 }
 
@@ -341,6 +379,7 @@ type Server struct {
 	//harborConn   map[int32]*Conn
 	harborConn    sync.Map
 	topicConnsMap map[string]*TopicConns
+	topicTag      map[string]*Queue
 }
 
 func (s *Server) Listen(address string) error {
@@ -385,7 +424,7 @@ func (s *Server) Close() {
 
 func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 	newConn := NewConn(s, tcpConn, atomic.AddInt32(&s.harbor, 1))
-	rMqMsg, rMqMsgErr := newConn.shConsumer.ReadMqMsg(2)
+	rMqMsg, rMqMsgErr := newConn.shConsumer.ReadMqMsg(5)
 	if rMqMsgErr != nil {
 		newConn.tcpConn.Close()
 		return
@@ -427,21 +466,21 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 	} else {
 		s.harborConn.Store(newConn.harbor, newConn)
 
-		if conn.topic == "" && request.Topic != "" && request.Tag != "" {
-			topicConns := s.topicConnsMap[conn.topic]
-			if topicConns == nil {
-				topicConns = NewTopicConns()
-				s.topicConnsMap[conn.topic] = topicConns
-			}
-
-			if conn.IsSubscribeAll() {
-				//topicConnsMap all conn  close
-			} else {
-				//关闭一样的tag conn
-			}
-
-			topicConns.harborConn[conn.harbor] = conn
+		log.Fatal("topicConnsMap 111111")
+		topicConns := s.topicConnsMap[conn.topic]
+		if topicConns == nil {
+			log.Fatal("topicConnsMap 222222")
+			topicConns = NewTopicConns()
+			s.topicConnsMap[conn.topic] = topicConns
 		}
+
+		if conn.IsSubscribeAll() {
+			//topicConnsMap all conn  close
+		} else {
+			//关闭一样的tag conn
+		}
+
+		topicConns.harborConn[conn.harbor] = conn
 
 		conn.Start()
 

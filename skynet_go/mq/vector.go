@@ -4,6 +4,7 @@ import (
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	_ "strings"
 	"time"
 )
 
@@ -31,27 +32,23 @@ func (v *Vector) read(timeout time.Duration) error {
 
 	size, err := v.tcpConn.Read(v.connBuffer)
 	if err != nil {
-		return err
+		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+			log.Fatal("timeout")
+			return errorCode.NewErrCode(errorCode.TimeOut, err.Error())
+		}
+
+		log.Fatal(err.Error())
+		return errorCode.NewErrCode(errorCode.Unknown, err.Error())
 	}
-	log.Fatal("read size = %d", size)
-	v.Put(v.connBuffer[:size])
+
+	if size > 0 {
+		v.Put(v.connBuffer[:size])
+	}
 	return nil
-
-	// buff := make([]byte, 4096)
-	// v.tcpConn.Read(buff)
-	// log.Fatal("buff = %v", buff)
-
-	// size, err := v.tcpConn.Read(v.connBuffer)
-	// if err != nil {
-	// return err
-	// }
-	// log.Fatal("read size = %d", size)
-	// return nil
 }
 
 func (v *Vector) Put(buf []byte) {
 	v.buffer = append(v.buffer, buf...)
-	log.Fatal("Put len(buf) = %d, len(v.buffer) = %d", len(buf), len(v.buffer))
 }
 func (v *Vector) checkSize(size int) bool {
 	buffLen := len(v.buffer)
@@ -63,7 +60,6 @@ func (v *Vector) checkSize(size int) bool {
 
 func (v *Vector) Get(size int) []byte {
 	buffLen := len(v.buffer)
-	log.Fatal("Get size = %d, buffLen = %d", size, buffLen)
 	if size > buffLen {
 		return nil
 	}
