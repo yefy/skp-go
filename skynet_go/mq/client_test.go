@@ -2,19 +2,32 @@ package mq
 
 import (
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/mq/rpcGob"
 	"testing"
 	"time"
 )
 
+type Test struct {
+	rpcGob.ServerBase
+}
+
+func (t *Test) OnRegister(in *RegisteRequest, out *RegisterReply) error {
+	log.Fatal("in = %+v", in)
+	out.Harbor = in.Harbor
+	return nil
+}
+
 func Test_Client1(t *testing.T) {
 	log.SetLevel(log.Lerr)
-	mqClient := NewClient("Test", ":5671")
+	mqClient := NewClient("Test", ":5672")
 	mqClient.Subscribe("Test", "*")
+	mqClient.RegisterServer(&Test{})
 	mqClient.Start()
+
 	time.Sleep(2 * time.Second)
 	request := RegisteRequest{}
 	request.Instance = "Instance"
-	request.Harbor = 1
+	request.Harbor = 12
 	request.Topic = "Topic"
 	request.Tag = "Tag"
 	reply := RegisterReply{}
@@ -23,7 +36,7 @@ func Test_Client1(t *testing.T) {
 		t.Error()
 	}
 
-	log.Fatal("creply.Harbor = %d", reply.Harbor)
+	log.Fatal("reply.Harbor = %d", reply.Harbor)
 
-	time.Sleep(200 * time.Second)
+	time.Sleep(5 * time.Second)
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/mq/rpcGob"
 	"skp-go/skynet_go/rpc"
 	"strings"
 	"sync"
@@ -60,10 +61,27 @@ func (c *CHConsumer) Read() {
 				log.Fatal("not rMqMsg.PendingSeq = %d", rMqMsg.PendingSeq)
 				continue
 			}
+			c.c.pendingMap.Delete(rMqMsg.GetPendingSeq())
 			pendingMsg := pendingMsgI.(*PendingMsg)
 			if pendingMsg.typ == typCall {
 				pendingMsg.pending <- rMqMsg
 			}
+		} else {
+			c.c.rpcGobS.SendReq(rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
+				log.Fatal("outStr = %+v, err = %+v", outStr, err)
+				sMqMsg := &MqMsg{}
+				sMqMsg.Typ = proto.Int32(typRespond)
+				sMqMsg.Harbor = proto.Int32(rMqMsg.GetHarbor())
+				sMqMsg.PendingSeq = proto.Uint64(rMqMsg.GetPendingSeq())
+				sMqMsg.Encode = proto.Int32(rMqMsg.GetEncode())
+				sMqMsg.Body = proto.String(outStr)
+				sMqMsg.Topic = proto.String("")
+				sMqMsg.Tag = proto.String("")
+				sMqMsg.Order = proto.Uint64(0)
+				sMqMsg.Class = proto.String("")
+				sMqMsg.Method = proto.String("")
+				c.c.chProducer.SendMqMsg(sMqMsg)
+			})
 		}
 	}
 }
@@ -297,6 +315,11 @@ type Client struct {
 	chConsumer     *CHConsumer
 	topic          string
 	tag            string
+	rpcGobS        *rpcGob.Server
+}
+
+func (c *Client) RegisterServer(obj rpcGob.ServerInterface) {
+	c.rpcGobS = rpcGob.NewServer(obj)
 }
 
 func (c *Client) Subscribe(topic string, tag string) {
