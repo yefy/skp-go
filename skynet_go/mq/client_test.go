@@ -4,7 +4,6 @@ import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq/rpcGob"
 	"testing"
-	"time"
 )
 
 type Test struct {
@@ -24,10 +23,9 @@ func Test_Client1(t *testing.T) {
 	mqClient.RegisterServer(&Test{})
 	mqClient.Start()
 
-	time.Sleep(2 * time.Second)
 	request := RegisteRequest{}
 	request.Instance = "Instance"
-	request.Harbor = 12
+	request.Harbor = 13
 	request.Topic = "Topic"
 	request.Tag = "Tag"
 	reply := RegisterReply{}
@@ -37,6 +35,4 @@ func Test_Client1(t *testing.T) {
 	}
 
 	log.Fatal("reply.Harbor = %d", reply.Harbor)
-
-	time.Sleep(5 * time.Second)
 }

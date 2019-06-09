@@ -392,6 +392,7 @@ func (c *Client) Register() error {
 	request.Harbor = c.harbor
 	request.Topic = c.topic
 	request.Tag = c.tag
+
 	reply := RegisterReply{}
 	msg := Msg{Topic: "Mq", Tag: "*"}
 	if err := c.Call(&msg, "Mq.OnRegister", &request, &reply); err != nil {

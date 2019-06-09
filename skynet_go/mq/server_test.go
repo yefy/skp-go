@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+//taskkill /im mq.test.exe /f
 //go test server_test.go server.go mqMsg.pb.go vector.go
 
 func Test_Server(t *testing.T) {
