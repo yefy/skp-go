@@ -69,17 +69,11 @@ func (c *CHConsumer) Read() {
 		} else {
 			c.c.rpcGobS.SendReq(rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
 				log.Fatal("outStr = %+v, err = %+v", outStr, err)
-				sMqMsg := &MqMsg{}
-				sMqMsg.Typ = proto.Int32(typRespond)
-				sMqMsg.Harbor = proto.Int32(rMqMsg.GetHarbor())
-				sMqMsg.PendingSeq = proto.Uint64(rMqMsg.GetPendingSeq())
-				sMqMsg.Encode = proto.Int32(rMqMsg.GetEncode())
-				sMqMsg.Body = proto.String(outStr)
-				sMqMsg.Topic = proto.String("")
-				sMqMsg.Tag = proto.String("")
-				sMqMsg.Order = proto.Uint64(0)
-				sMqMsg.Class = proto.String("")
-				sMqMsg.Method = proto.String("")
+				sMqMsg, err := ReplyMqMsg(rMqMsg.GetHarbor(), rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), outStr)
+				if err != nil {
+					log.Err(err.Error())
+					return
+				}
 				c.c.chProducer.SendMqMsg(sMqMsg)
 			})
 		}

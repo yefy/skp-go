@@ -46,9 +46,14 @@ func DecodeBody(encode int32, str string, body interface{}) error {
 }
 
 func ReplyMqMsg(harbor int32, pendingSeq uint64, encode int32, body interface{}) (*MqMsg, error) {
-	str, err := EncodeBody(encode, body)
-	if err != nil {
-		return nil, err
+	var str string
+	str, ok := body.(string)
+	if !ok {
+		var err error
+		str, err = EncodeBody(encode, body)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	mqMsg := &MqMsg{}
