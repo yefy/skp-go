@@ -1,10 +1,9 @@
 package rpcEncode
 
 import (
-	"bytes"
 	"context"
-	"encoding/gob"
 	"reflect"
+	"skp-go/skynet_go/encodes"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"strings"
@@ -19,9 +18,9 @@ func SetTest(b bool) {
 }
 
 const (
-	typCall    = "Call"
-	typSend    = "Send"
-	typSendReq = "SendReq"
+	typCall int32 = iota
+	typSend
+	typSendReq
 )
 
 const (
@@ -33,17 +32,18 @@ const (
 type CallBack func(string, error)
 
 type Msg struct {
-	typ      string
+	typ      int32
 	method   string
 	args     string
 	reply    string
 	pending  chan *Msg
 	err      error
 	callBack CallBack
+	encode   int32
 }
 
 func (m *Msg) init() {
-	m.typ = ""
+	m.typ = 0
 	m.method = ""
 	m.err = nil
 }
@@ -306,10 +306,8 @@ func (server *Server) callBack(msg *Msg) {
 				argIsValue = true
 			}
 
-			var buf bytes.Buffer
-			buf.WriteString(msg.args)
-			dec := gob.NewDecoder(&buf)
-			dec.Decode(args.Interface())
+			encodes.DecodeBody(msg.encode, msg.args, args.Interface())
+
 			//buf := bytes.NewBufferString()
 			// argv guaranteed to be a pointer now.
 			if argIsValue {
@@ -354,10 +352,8 @@ func (server *Server) callBack(msg *Msg) {
 				argIsValue = true
 			}
 
-			var buf bytes.Buffer
-			buf.WriteString(msg.args)
-			dec := gob.NewDecoder(&buf)
-			dec.Decode(args.Interface())
+			encodes.DecodeBody(msg.encode, msg.args, args.Interface())
+
 			//buf := bytes.NewBufferString()
 			// argv guaranteed to be a pointer now.
 			if argIsValue {
@@ -386,13 +382,9 @@ func (server *Server) callBack(msg *Msg) {
 
 				msg.err = errI.(error)
 			} else {
-				msg.err = nil
+				msg.reply, msg.err = encodes.EncodeBody(msg.encode, replyv.Interface())
 			}
 
-			var bufOut bytes.Buffer
-			enc := gob.NewEncoder(&bufOut)
-			enc.Encode(replyv.Interface())
-			msg.reply = bufOut.String()
 			msg.callBack(msg.reply, msg.err)
 		}()
 
@@ -415,10 +407,8 @@ func (server *Server) callBack(msg *Msg) {
 				argIsValue = true
 			}
 
-			var buf bytes.Buffer
-			buf.WriteString(msg.args)
-			dec := gob.NewDecoder(&buf)
-			dec.Decode(args.Interface())
+			encodes.DecodeBody(msg.encode, msg.args, args.Interface())
+
 			//buf := bytes.NewBufferString()
 			// argv guaranteed to be a pointer now.
 			if argIsValue {
@@ -444,16 +434,11 @@ func (server *Server) callBack(msg *Msg) {
 			retValues := objMethod.method.Func.Call([]reflect.Value{server.service.objValue, args, replyv})
 			errI := retValues[0].Interface()
 			if errI != nil {
-
 				msg.err = errI.(error)
 			} else {
-				msg.err = nil
+				msg.reply, msg.err = encodes.EncodeBody(msg.encode, replyv.Interface())
 			}
 
-			var bufOut bytes.Buffer
-			enc := gob.NewEncoder(&bufOut)
-			enc.Encode(replyv.Interface())
-			msg.reply = bufOut.String()
 		}()
 		msg.pending <- msg
 	}
@@ -480,7 +465,7 @@ func (server *Server) run(index int32) {
 	}
 }
 
-func (server *Server) Send(method string, args string) error {
+func (server *Server) Send(encode int32, method string, args string) error {
 	service := server.service
 	if objM := service.objMethod[method]; objM == nil {
 		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
@@ -491,13 +476,14 @@ func (server *Server) Send(method string, args string) error {
 	msg.typ = typSend
 	msg.method = method
 	msg.args = args
+	msg.encode = encode
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
 	return nil
 }
 
-func (server *Server) SendReq(method string, args string, callBack CallBack) error {
+func (server *Server) SendReq(encode int32, method string, args string, callBack CallBack) error {
 	service := server.service
 	if objM := service.objMethod[method]; objM == nil {
 		return log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
@@ -509,13 +495,14 @@ func (server *Server) SendReq(method string, args string, callBack CallBack) err
 	msg.method = method
 	msg.args = args
 	msg.callBack = callBack
+	msg.encode = encode
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg
 	return nil
 }
 
-func (server *Server) Call(method string, args string) (string, error) {
+func (server *Server) Call(encode int32, method string, args string) (string, error) {
 	service := server.service
 	if objM := service.objMethod[method]; objM == nil {
 		return "", log.Panic(errorCode.NewErrCode(0, "%+v not method = %+v", service.objName, method))
@@ -527,6 +514,7 @@ func (server *Server) Call(method string, args string) (string, error) {
 	msg.typ = typCall
 	msg.method = method
 	msg.args = args
+	msg.encode = encode
 
 	atomic.AddInt32(&server.sendNumber, 1)
 	server.cache <- msg

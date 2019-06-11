@@ -1,6 +1,7 @@
-package rpcProto
+package rpcEncode
 
 import (
+	"skp-go/skynet_go/encodes"
 	log "skp-go/skynet_go/logger"
 	"testing"
 
@@ -36,12 +37,16 @@ func Test_ExampleTest_Send(t *testing.T) {
 		Email: protobuf.String("333"),
 	}
 
-	inByte, _ := protobuf.Marshal(in)
-
-	err := server.Send("ExampleTest", string(inByte))
+	inStr, err := encodes.EncodeBody(encodes.EncodeProto, in)
 	if err != nil {
 		t.Error()
 	}
+
+	err = server.Send(encodes.EncodeProto, "ExampleTest", inStr)
+	if err != nil {
+		t.Error()
+	}
+
 	server.Stop(true)
 }
 
@@ -56,14 +61,20 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 		Email: protobuf.String("333"),
 	}
 
-	inByte, _ := protobuf.Marshal(in)
+	inStr, err := encodes.EncodeBody(encodes.EncodeProto, in)
+	if err != nil {
+		t.Error()
+	}
 
-	server.SendReq("ExampleTest", string(inByte), func(outStr string, err error) {
+	server.SendReq(encodes.EncodeProto, "ExampleTest", inStr, func(outStr string, err error) {
 		if err != nil {
 			t.Error()
 		}
-		log.Fatal("outStr = %s", outStr)
+		out := &Person{}
+		encodes.DecodeBody(encodes.EncodeProto, outStr, out)
+		log.Fatal("out = %+v", out)
 	})
+
 	server.Stop(true)
 }
 
@@ -78,14 +89,20 @@ func Test_ExampleTest_Call(t *testing.T) {
 		Email: protobuf.String("333"),
 	}
 
-	inByte, _ := protobuf.Marshal(in)
-	log.Fatal("string(inByte) = %s", string(inByte))
-	outStr, err := server.Call("ExampleTest", string(inByte))
+	inStr, err := encodes.EncodeBody(encodes.EncodeProto, in)
 	if err != nil {
 		t.Error()
 	}
 
-	log.Fatal("outStr = %s", outStr)
+	outStr, err := server.Call(encodes.EncodeProto, "ExampleTest", inStr)
+	if err != nil {
+		t.Error()
+	}
+
+	out := &Person{}
+	encodes.DecodeBody(encodes.EncodeProto, outStr, out)
+	log.Fatal("out = %+v", out)
+
 	server.Stop(true)
 }
 

@@ -1,16 +1,17 @@
-package mq
+package client
 
 import (
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/mq/rpcGob"
+	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/rpc/rpcEncode"
 	"testing"
 )
 
 type Test struct {
-	rpcGob.ServerBase
+	rpcEncode.ServerBase
 }
 
-func (t *Test) OnRegister(in *RegisteRequest, out *RegisterReply) error {
+func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
 	log.Fatal("in = %+v", in)
 	out.Harbor = in.Harbor
 	return nil
@@ -23,12 +24,12 @@ func Test_Client1(t *testing.T) {
 	mqClient.RegisterServer(&Test{})
 	mqClient.Start()
 
-	request := RegisteRequest{}
+	request := mq.RegisteRequest{}
 	request.Instance = "Instance"
 	request.Harbor = 13
 	request.Topic = "Topic"
 	request.Tag = "Tag"
-	reply := RegisterReply{}
+	reply := mq.RegisterReply{}
 	msg := Msg{Topic: "Test", Tag: "0"}
 	if err := mqClient.Call(&msg, "Test.OnRegister", &request, &reply); err != nil {
 		t.Error()

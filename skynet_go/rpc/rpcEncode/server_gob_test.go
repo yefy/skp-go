@@ -1,10 +1,8 @@
-package rpcGob
+package rpcEncode
 
 import (
-	"bytes"
-	"encoding/gob"
+	"skp-go/skynet_go/encodes"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/mq/rpcProto"
 	"testing"
 
 	protobuf "github.com/golang/protobuf/proto"
@@ -19,7 +17,7 @@ func NewServerTest() *ServerTest {
 	return serverTest
 }
 
-func (serverTest *ServerTest) ExampleTest(in *rpcProto.Person, out *rpcProto.Person) error {
+func (serverTest *ServerTest) ExampleTest(in *Person, out *Person) error {
 	log.Fatal("in = %+v", in)
 	out.Name = protobuf.String(in.GetName())
 	out.Age = protobuf.Int32(in.GetAge())
@@ -33,18 +31,18 @@ func Test_ExampleTest_Send(t *testing.T) {
 	serverTest := NewServerTest()
 	server := NewServer(serverTest)
 
-	in := &rpcProto.Person{
+	in := &Person{
 		Name:  protobuf.String("111"),
 		Age:   protobuf.Int32(222),
 		Email: protobuf.String("333"),
 	}
 
-	var bufIn bytes.Buffer
-	enc := gob.NewEncoder(&bufIn)
-	enc.Encode(in)
-	inStr := bufIn.String()
+	inStr, err := encodes.EncodeBody(encodes.EncodeGob, in)
+	if err != nil {
+		t.Error()
+	}
 
-	err := server.Send("ExampleTest", inStr)
+	err = server.Send(encodes.EncodeGob, "ExampleTest", inStr)
 	if err != nil {
 		t.Error()
 	}
@@ -56,23 +54,27 @@ func Test_ExampleTest_SendReq(t *testing.T) {
 	serverTest := NewServerTest()
 	server := NewServer(serverTest)
 
-	in := &rpcProto.Person{
+	in := &Person{
 		Name:  protobuf.String("111"),
 		Age:   protobuf.Int32(222),
 		Email: protobuf.String("333"),
 	}
 
-	var bufIn bytes.Buffer
-	enc := gob.NewEncoder(&bufIn)
-	enc.Encode(in)
-	inStr := bufIn.String()
+	inStr, err := encodes.EncodeBody(encodes.EncodeGob, in)
+	if err != nil {
+		t.Error()
+	}
 
-	server.SendReq("ExampleTest", inStr, func(outStr string, err error) {
+	server.SendReq(encodes.EncodeGob, "ExampleTest", inStr, func(outStr string, err error) {
 		if err != nil {
 			t.Error()
 		}
-		log.Fatal("outStr = %s", outStr)
+
+		out := &Person{}
+		encodes.DecodeBody(encodes.EncodeGob, outStr, out)
+		log.Fatal("out = %+v", out)
 	})
+
 	server.Stop(true)
 }
 
@@ -81,23 +83,26 @@ func Test_ExampleTest_Call(t *testing.T) {
 	serverTest := NewServerTest()
 	server := NewServer(serverTest)
 
-	in := &rpcProto.Person{
+	in := &Person{
 		Name:  protobuf.String("111"),
 		Age:   protobuf.Int32(222),
 		Email: protobuf.String("333"),
 	}
 
-	var bufIn bytes.Buffer
-	enc := gob.NewEncoder(&bufIn)
-	enc.Encode(in)
-	inStr := bufIn.String()
-	log.Fatal("inStr = %s", inStr)
-	outStr, err := server.Call("ExampleTest", inStr)
+	inStr, err := encodes.EncodeBody(encodes.EncodeGob, in)
 	if err != nil {
 		t.Error()
 	}
 
-	log.Fatal("outStr = %s", outStr)
+	outStr, err := server.Call(encodes.EncodeGob, "ExampleTest", inStr)
+	if err != nil {
+		t.Error()
+	}
+
+	out := &Person{}
+	encodes.DecodeBody(encodes.EncodeGob, outStr, out)
+	log.Fatal("out = %+v", out)
+
 	server.Stop(true)
 }
 

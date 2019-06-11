@@ -25,7 +25,7 @@ func (v *Vector) SetConn(tcpConn *net.TCPConn) {
 	v.tcpConn = tcpConn
 }
 
-func (v *Vector) read(timeout time.Duration) error {
+func (v *Vector) Read(timeout time.Duration) error {
 	if timeout > 0 {
 		v.tcpConn.SetReadDeadline(time.Now().Add(timeout * time.Second))
 	}
@@ -50,7 +50,7 @@ func (v *Vector) read(timeout time.Duration) error {
 func (v *Vector) Put(buf []byte) {
 	v.buffer = append(v.buffer, buf...)
 }
-func (v *Vector) checkSize(size int) bool {
+func (v *Vector) CheckSize(size int) bool {
 	buffLen := len(v.buffer)
 	if size > buffLen {
 		return false

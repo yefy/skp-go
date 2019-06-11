@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	typCall    = "Call"
-	typSend    = "Send"
-	typSendReq = "SendReq"
+	typCall int32 = iota
+	typSend
+	typSendReq
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 )
 
 type Msg struct {
-	typ      string
+	typ      int32
 	method   string
 	args     interface{}
 	pending  chan interface{}
@@ -30,7 +30,7 @@ type Msg struct {
 }
 
 func (m *Msg) init() {
-	m.typ = ""
+	m.typ = 0
 	m.method = ""
 	m.callBack = nil
 	m.err = nil

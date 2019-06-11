@@ -924,3 +924,4 @@
 2019/06/06 00:28:57.473924 | main.go:30 | main.(*BBB).print | 1 | fatal | bbb
 2019/06/06 00:31:24.099757 | main.go:35 | main.main | 1 |   all | main start
 2019/06/06 00:31:41.821281 | main.go:35 | main.main | 1 |   all | main start
+2019/06/12 00:43:33.337564 | main.go:9 | main.main | 1 |   all | main start

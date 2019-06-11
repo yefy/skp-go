@@ -1,29 +1,19 @@
-package rpcProto
+package server
 
 import (
 	log "skp-go/skynet_go/logger"
 	"testing"
-
-	protobuf "github.com/golang/protobuf/proto"
 )
 
-func Test_proto(t *testing.T) {
-	log.SetLevel(log.Lall)
+//taskkill /im server.test.exe /f
+//go test server_test.go server.go mqMsg.pb.go vector.go
 
-	msg := &Person{
-		Name:  protobuf.String("111"),
-		Age:   protobuf.Int32(222),
-		Email: protobuf.String("333"),
-	}
-
-	var msgInter interface{} = msg
-
-	buffer, _ := protobuf.Marshal(msgInter.(protobuf.Message))
-
-	msgOut := &Person{}
-	var msgOutInter interface{} = msgOut
-	protobuf.Unmarshal(buffer, msgOutInter.(protobuf.Message))
-	log.Fatal("%+v", msgOut)
+func Test_Server(t *testing.T) {
+	log.SetLevel(log.Lerr)
+	server := NewServer()
+	server.Listen(":5672")
+	wait := make(chan int)
+	<-wait
 }
 
 //go test
