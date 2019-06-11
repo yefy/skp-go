@@ -6,5 +6,7 @@ import (
 
 func main() {
 	log.NewGlobalLogger("./global.log", "", log.LstdFlags, log.Lall, log.Lscreen|log.Lfile)
+
 	log.All("main start")
+
 }
