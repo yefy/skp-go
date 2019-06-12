@@ -1,11 +1,10 @@
 package rpc
 
 import (
-	"context"
 	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"sync"
+	"skp-go/skynet_go/rpc"
 	"sync/atomic"
 )
 
@@ -13,34 +12,6 @@ var isTest bool = true
 
 func SetTest(b bool) {
 	isTest = b
-}
-
-const (
-	typCall int32 = iota
-	typCallReq
-	typSend
-	typSendReq
-)
-
-const (
-	stateStop = iota
-	stateStart
-	stateStopping
-)
-
-type Msg struct {
-	typ     int32
-	method  string
-	args    interface{}
-	reply   interface{}
-	pending chan interface{}
-	err     interface{}
-}
-
-func (m *Msg) init() {
-	m.typ = 0
-	m.method = ""
-	m.err = nil
 }
 
 type ObjMethod struct {
@@ -57,7 +28,7 @@ type ObjMethod struct {
 }
 
 type Service struct {
-	obj       ServerInterface
+	obj       ServerI
 	objName   string
 	objType   reflect.Type
 	objValue  reflect.Value
@@ -65,7 +36,7 @@ type Service struct {
 	objMethod map[string]*ObjMethod
 }
 
-func NewService(obj ServerInterface) (*Service, error) {
+func NewService(obj ServerI) (*Service, error) {
 	s := &Service{}
 	s.obj = obj
 	s.objType = reflect.TypeOf(obj)
@@ -94,46 +65,34 @@ func NewService(obj ServerInterface) (*Service, error) {
 	return s, nil
 }
 
-type ServerInterface interface {
+type ServerI interface {
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Close()
 }
 
-type ServerBase struct {
+type ServerB struct {
 	server *Server
 }
 
-func (sb *ServerBase) RPC_SetServer(server *Server) {
+func (sb *ServerB) RPC_SetServer(server *Server) {
 	sb.server = server
 }
 
-func (sb *ServerBase) RPC_GetServer() *Server {
+func (sb *ServerB) RPC_GetServer() *Server {
 	return sb.server
 }
 
-func (sb *ServerBase) RPC_Close() {
+func (sb *ServerB) RPC_Close() {
 
 }
 
 type Server struct {
-	service         *Service
-	cacheNumber     int
-	cache           chan interface{}
-	goroutineNumber int32
-	waitGroup       *sync.WaitGroup
-	ctx             context.Context
-	cancel          context.CancelFunc
-	msgPool         *sync.Pool
-	valuePools      []*sync.Pool
-	sendNumber      int32
-	recvNumber      int32
-	state           int32
-	waitMsg         int32
-	mutex           sync.Mutex
+	service *Service
+	*rpc.Server
 }
 
-func NewServer(obj ServerInterface) *Server {
+func NewServer(obj ServerI) *Server {
 	service, err := NewService(obj)
 	if err != nil {
 		return nil
@@ -141,126 +100,34 @@ func NewServer(obj ServerInterface) *Server {
 
 	server := &Server{}
 	server.service = service
-	server.cacheNumber = 1000
-	server.state = stateStop
-
-	server.msgPool = &sync.Pool{New: func() interface{} {
-		msg := &Msg{}
-		msg.pending = make(chan interface{}, 1)
-		return msg
-	},
-	}
-
-	server.valuePools = make([]*sync.Pool, 8)
-	for i := 0; i < len(server.valuePools); i++ {
-		valueLen := i + 1
-		server.valuePools[i] = &sync.Pool{New: func() interface{} {
-			value := make([]reflect.Value, valueLen)
-			return value
-		},
-		}
-	}
-
-	obj.RPC_SetServer(server)
-
-	server.Start(true)
+	server.Server = rpc.NewServer(server)
 
 	return server
 }
-
 func (server *Server) object() interface{} {
 	return server.service.obj
 }
 
-func (server *Server) Addoroutine(num int) {
-	for i := 0; i < num; i++ {
-		atomic.AddInt32(&server.goroutineNumber, 1)
-		server.waitGroup.Add(1)
-		goroutineNumber := server.goroutineNumber
-		go server.run(goroutineNumber)
-	}
+func (server *Server) RPC_Start() {
+	server.service.obj.RPC_SetServer(server)
+}
+func (server *Server) RPC_Stop() {
+	server.service.obj.RPC_Close()
 }
 
-func (server *Server) Start(isNewCache bool) {
-	defer server.mutex.Unlock()
-	server.mutex.Lock()
-
-	if server.state == stateStop {
-		server.goroutineNumber = 0
-		server.sendNumber = 0
-		server.recvNumber = 0
-		server.state = stateStart
-		server.waitMsg = 1
-		if isNewCache {
-			server.cache = make(chan interface{}, server.cacheNumber)
-		}
-		if server.cache == nil {
-			server.cache = make(chan interface{}, server.cacheNumber)
-		}
-		server.waitGroup = &sync.WaitGroup{}
-		server.ctx, server.cancel = context.WithCancel(context.Background())
-		server.Addoroutine(1)
-	}
-}
-
-func (server *Server) SendStop(waitMsg bool) {
-	go func() {
-		server.Stop(waitMsg)
-	}()
-}
-
-func (server *Server) Stop(waitMsg bool) {
-	defer server.mutex.Unlock()
-	server.mutex.Lock()
-
-	if server.state == stateStart {
-		server.state = stateStopping
-		if waitMsg {
-			atomic.StoreInt32(&server.waitMsg, 1)
-		} else {
-			atomic.StoreInt32(&server.waitMsg, 0)
-		}
-		server.cancel()
-		server.waitGroup.Wait()
-		server.state = stateStop
-		server.service.obj.RPC_Close()
-	}
-}
-
-func (server *Server) IsStart() bool {
-	return atomic.LoadInt32(&server.state) == stateStart
-}
-
-func (server *Server) IsStop() bool {
-	return atomic.LoadInt32(&server.state) == stateStopping
-}
-
-func (server *Server) isStopping() bool {
-	if atomic.LoadInt32(&server.state) == stateStopping {
-		if atomic.LoadInt32(&server.waitMsg) == 0 {
-			return true
-		} else {
-			if atomic.LoadInt32(&server.recvNumber) == atomic.LoadInt32(&server.sendNumber) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (server *Server) callBack(msg *Msg) {
+func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 	service := server.service
-	objMethod := service.objMethod[msg.method]
-	args := msg.args.([]interface{})
+	objMethod := service.objMethod[msg.Method]
+	args := msg.Args.([]interface{})
 
-	if msg.typ == typSend {
+	if msg.Typ == rpc.TypSend {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
 					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
-			valuePool := server.valuePools[len(args)]
+			valuePool := server.ValuePools[len(args)]
 			argsValue := valuePool.Get().([]reflect.Value)
 			argsValue[0] = service.objValue
 			for i := 0; i < len(args); i++ {
@@ -269,8 +136,8 @@ func (server *Server) callBack(msg *Msg) {
 
 			objMethod.method.Func.Call(argsValue)
 		}()
-		server.msgPool.Put(msg)
-	} else if msg.typ == typSendReq {
+		server.MsgPool.Put(msg)
+	} else if msg.Typ == rpc.TypSendReq {
 		var replyValues []reflect.Value
 		func() {
 			defer func() {
@@ -278,7 +145,7 @@ func (server *Server) callBack(msg *Msg) {
 					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
-			valuePool := server.valuePools[len(args)-1]
+			valuePool := server.ValuePools[len(args)-1]
 			argsValue := valuePool.Get().([]reflect.Value)
 			argsValue[0] = service.objValue
 			for i := 0; i < len(args)-1; i++ {
@@ -292,16 +159,16 @@ func (server *Server) callBack(msg *Msg) {
 			replyFuncName.Call(replyValues)
 		}()
 
-		server.msgPool.Put(msg)
-	} else if msg.typ == typCall {
+		server.MsgPool.Put(msg)
+	} else if msg.Typ == rpc.TypCall {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
 
-			valuePool := server.valuePools[len(args)]
+			valuePool := server.ValuePools[len(args)]
 			argsValue := valuePool.Get().([]reflect.Value)
 			argsValue[0] = service.objValue
 			for i := 0; i < len(args); i++ {
@@ -309,18 +176,18 @@ func (server *Server) callBack(msg *Msg) {
 			}
 
 			replyValues := objMethod.method.Func.Call(argsValue)
-			msg.reply = replyValues
+			msg.Reply = replyValues
 		}()
-		msg.pending <- msg
-	} else if msg.typ == typCallReq {
+		msg.Pending <- msg
+	} else if msg.Typ == rpc.TypCallReq {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
 
-			valuePool := server.valuePools[len(args)-1]
+			valuePool := server.ValuePools[len(args)-1]
 			argsValue := valuePool.Get().([]reflect.Value)
 			argsValue[0] = service.objValue
 			for i := 0; i < len(args)-1; i++ {
@@ -328,33 +195,12 @@ func (server *Server) callBack(msg *Msg) {
 			}
 
 			replyValues := objMethod.method.Func.Call(argsValue)
-			msg.reply = replyValues
+			msg.Reply = replyValues
 		}()
-		msg.pending <- msg
+		msg.Pending <- msg
 	}
 	//objMethod.value.Call([]reflect.Value{reflect.ValueOf(args)})
 	//objMethod.method.Func.Call([]reflect.Value{objValue, reflect.ValueOf(args)})
-}
-
-func (server *Server) run(index int32) {
-	defer server.waitGroup.Done()
-	done := server.ctx.Done()
-	for {
-		select {
-		case <-done:
-			done = nil
-			if server.isStopping() {
-				return
-			}
-		case cache := <-server.cache:
-			msg := cache.(*Msg)
-			server.callBack(msg)
-			atomic.AddInt32(&server.recvNumber, 1)
-			if server.isStopping() {
-				return
-			}
-		}
-	}
 }
 
 func checkArgv(isFunc bool, args ...interface{}) error {
@@ -385,14 +231,14 @@ func (server *Server) Send(method string, args ...interface{}) error {
 		return err
 	}
 
-	msg := server.msgPool.Get().(*Msg)
-	msg.init()
-	msg.typ = typSend
-	msg.method = method
-	msg.args = args
+	msg := server.MsgPool.Get().(*rpc.Msg)
+	msg.Init()
+	msg.Typ = rpc.TypSend
+	msg.Method = method
+	msg.Args = args
 
-	atomic.AddInt32(&server.sendNumber, 1)
-	server.cache <- msg
+	atomic.AddInt32(&server.SendNumber, 1)
+	server.Cache <- msg
 	return nil
 }
 
@@ -406,14 +252,14 @@ func (server *Server) SendReq(method string, args ...interface{}) error {
 		return err
 	}
 
-	msg := server.msgPool.Get().(*Msg)
-	msg.init()
-	msg.typ = typSendReq
-	msg.method = method
-	msg.args = args
+	msg := server.MsgPool.Get().(*rpc.Msg)
+	msg.Init()
+	msg.Typ = rpc.TypSendReq
+	msg.Method = method
+	msg.Args = args
 
-	atomic.AddInt32(&server.sendNumber, 1)
-	server.cache <- msg
+	atomic.AddInt32(&server.SendNumber, 1)
+	server.Cache <- msg
 	return nil
 }
 
@@ -427,22 +273,22 @@ func (server *Server) Call(method string, args ...interface{}) error {
 		return err
 	}
 
-	msg := server.msgPool.Get().(*Msg)
-	msg.init()
-	defer server.msgPool.Put(msg)
-	msg.typ = typCall
-	msg.method = method
-	msg.args = args
+	msg := server.MsgPool.Get().(*rpc.Msg)
+	msg.Init()
+	defer server.MsgPool.Put(msg)
+	msg.Typ = rpc.TypCall
+	msg.Method = method
+	msg.Args = args
 
-	atomic.AddInt32(&server.sendNumber, 1)
-	server.cache <- msg
-	<-msg.pending
+	atomic.AddInt32(&server.SendNumber, 1)
+	server.Cache <- msg
+	<-msg.Pending
 
-	if msg.err != nil {
-		return msg.err.(error)
+	if msg.Err != nil {
+		return msg.Err.(error)
 	}
 
-	replyValues := msg.reply.([]reflect.Value)
+	replyValues := msg.Reply.([]reflect.Value)
 	if len(replyValues) > 0 {
 		first, ok := replyValues[0].Interface().(error)
 		if ok {
@@ -463,32 +309,32 @@ func (server *Server) CallReq(method string, args ...interface{}) error {
 		return err
 	}
 
-	msg := server.msgPool.Get().(*Msg)
-	msg.init()
-	defer server.msgPool.Put(msg)
-	msg.typ = typCallReq
-	msg.method = method
-	msg.args = args
+	msg := server.MsgPool.Get().(*rpc.Msg)
+	msg.Init()
+	defer server.MsgPool.Put(msg)
+	msg.Typ = rpc.TypCallReq
+	msg.Method = method
+	msg.Args = args
 
-	atomic.AddInt32(&server.sendNumber, 1)
-	server.cache <- msg
-	<-msg.pending
+	atomic.AddInt32(&server.SendNumber, 1)
+	server.Cache <- msg
+	<-msg.Pending
 
-	if msg.err == nil {
+	if msg.Err == nil {
 		replyFunc := args[len(args)-1]
 		replyFuncName := reflect.ValueOf(replyFunc)
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.err = log.Panic(errorCode.NewErrCode(0, "%+v", err))
+					msg.Err = log.Panic(errorCode.NewErrCode(0, "%+v", err))
 				}
 			}()
-			replyFuncName.Call(msg.reply.([]reflect.Value))
+			replyFuncName.Call(msg.Reply.([]reflect.Value))
 		}()
 	}
 
-	if msg.err != nil {
-		return msg.err.(error)
+	if msg.Err != nil {
+		return msg.Err.(error)
 	}
 
 	return nil

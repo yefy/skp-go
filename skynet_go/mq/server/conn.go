@@ -21,7 +21,7 @@ func NewConn(server *Server, tcpConn *net.TCPConn) *Conn {
 }
 
 type Conn struct {
-	rpc.ServerBase
+	rpc.ServerB
 	server   *Server
 	harbor   int32
 	instance string //topic_$$

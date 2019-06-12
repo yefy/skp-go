@@ -17,7 +17,7 @@ func NewCHConsumer(conn *Client) *CHConsumer {
 }
 
 type CHConsumer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	conn *Client
 	*mq.Consumer
 }

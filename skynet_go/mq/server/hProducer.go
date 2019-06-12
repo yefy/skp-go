@@ -15,7 +15,7 @@ func NewSHProducer(conn *Conn) *SHProducer {
 }
 
 type SHProducer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	*mq.Producer
 	conn *Conn
 }

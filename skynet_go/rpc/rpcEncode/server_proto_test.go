@@ -9,7 +9,7 @@ import (
 )
 
 type ServerTest struct {
-	ServerBase
+	ServerB
 }
 
 func NewServerTest() *ServerTest {

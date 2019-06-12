@@ -24,7 +24,7 @@ func NewProducer(pI ProducerI) *Producer {
 }
 
 type Producer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	pI         ProducerI
 	tcpConn    *net.TCPConn
 	tcpVersion int32

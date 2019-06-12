@@ -2,6 +2,7 @@ package rpc
 
 import (
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/rpc"
 	"sync"
 	"testing"
 )
@@ -33,8 +34,8 @@ func NewChanTestEx(sendChanNumber int) *ChanTestEx {
 	c.server = NewServerTest()
 
 	c.msgPool = &sync.Pool{New: func() interface{} {
-		msg := &Msg{}
-		msg.pending = make(chan interface{}, 1)
+		msg := &rpc.Msg{}
+		msg.Pending = make(chan interface{}, 1)
 		return msg
 	},
 	}
@@ -44,16 +45,16 @@ func NewChanTestEx(sendChanNumber int) *ChanTestEx {
 func (c *ChanTestEx) Recv() {
 	for {
 		send := <-c.send
-		msg := send.(*Msg)
-		sendData := msg.args
+		msg := send.(*rpc.Msg)
+		sendData := msg.Args
 		//log.Debug("sendData = %+v", sendData.(int))
 
 		if c.typ == "call" {
 			in := sendData.(int)
 			out := 0
 			c.server.ExamplePerf(&in, &out)
-			msg.reply = out
-			msg.err = nil
+			msg.Reply = out
+			msg.Err = nil
 			c.recv <- msg
 		} else {
 			in := sendData.(int)
@@ -81,12 +82,12 @@ func (c *ChanTestEx) Close() {
 func (c *ChanTestEx) Call() error {
 	c.number++
 	sendData := c.number
-	msg := c.msgPool.Get().(*Msg)
-	msg.args = sendData
+	msg := c.msgPool.Get().(*rpc.Msg)
+	msg.Args = sendData
 	c.send <- msg
 	recv := <-c.recv
-	reveMsg := recv.(*Msg)
-	reveData := reveMsg.reply
+	reveMsg := recv.(*rpc.Msg)
+	reveData := reveMsg.Reply
 	if sendData != reveData.(int) {
 		panic("Call error")
 	}
@@ -96,8 +97,8 @@ func (c *ChanTestEx) Call() error {
 
 func (c *ChanTestEx) Send() error {
 	c.number++
-	msg := c.msgPool.Get().(*Msg)
-	msg.args = c.number
+	msg := c.msgPool.Get().(*rpc.Msg)
+	msg.Args = c.number
 	c.send <- msg
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 var _ = errorCode.NewErrCode
 
 type ServerTest struct {
+	ServerB
 	n1    int
 	n2    int
 	str1  string

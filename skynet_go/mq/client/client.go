@@ -71,7 +71,7 @@ func NewClient(instance string, address string) *Client {
 }
 
 type Client struct {
-	rpc.ServerBase
+	rpc.ServerB
 	address        string
 	harbor         int32
 	instance       string //xx_ip_$$ (模块名)_(ip)_(进程id)
@@ -86,7 +86,7 @@ type Client struct {
 	*mq.Conn
 }
 
-func (c *Client) RegisterServer(obj rpcEncode.ServerInterface) {
+func (c *Client) RegisterServer(obj rpcEncode.ServerI) {
 	c.rpcEncode = rpcEncode.NewServer(obj)
 }
 

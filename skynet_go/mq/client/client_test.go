@@ -8,7 +8,7 @@ import (
 )
 
 type Test struct {
-	rpcEncode.ServerBase
+	rpcEncode.ServerB
 }
 
 func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {

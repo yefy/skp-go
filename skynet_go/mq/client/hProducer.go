@@ -15,7 +15,7 @@ func NewCHProducer(c *Client) *CHProducer {
 }
 
 type CHProducer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	*mq.Producer
 	conn *Client
 }

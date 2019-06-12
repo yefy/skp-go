@@ -32,7 +32,7 @@ func NewServer() *Server {
 }
 
 type Server struct {
-	rpc.ServerBase
+	rpc.ServerB
 	listen *net.TCPListener
 	harbor int32
 	mutex  sync.Mutex

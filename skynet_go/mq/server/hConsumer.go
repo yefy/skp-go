@@ -16,7 +16,7 @@ func NewSHConsumer(conn *Conn) *SHConsumer {
 }
 
 type SHConsumer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	conn *Conn
 	*mq.Consumer
 }

@@ -17,7 +17,7 @@ func NewConn(tcpConn *net.TCPConn) *Conn {
 }
 
 type Conn struct {
-	rpc.ServerBase
+	rpc.ServerB
 	mutex      sync.Mutex
 	tcpConn    *net.TCPConn
 	tcpVersion int32

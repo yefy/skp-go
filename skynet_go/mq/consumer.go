@@ -25,7 +25,7 @@ func NewConsumer(cI ConsumerI) *Consumer {
 }
 
 type Consumer struct {
-	rpc.ServerBase
+	rpc.ServerB
 	cI         ConsumerI
 	vector     *Vector
 	tcpConn    *net.TCPConn
