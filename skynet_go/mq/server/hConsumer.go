@@ -4,19 +4,19 @@ import (
 	"net"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewSHConsumer(conn *Conn) *SHConsumer {
 	c := &SHConsumer{}
 	c.conn = conn
 	c.Consumer = mq.NewConsumer(c)
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 	return c
 }
 
 type SHConsumer struct {
-	rpc.ServerB
+	rpcU.ServerB
 	conn *Conn
 	*mq.Consumer
 }

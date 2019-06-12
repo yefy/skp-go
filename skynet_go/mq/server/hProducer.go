@@ -3,19 +3,19 @@ package server
 import (
 	"net"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewSHProducer(conn *Conn) *SHProducer {
 	p := &SHProducer{}
 	p.conn = conn
 	p.Producer = mq.NewProducer(p)
-	rpc.NewServer(p)
+	rpcU.NewServer(p)
 	return p
 }
 
 type SHProducer struct {
-	rpc.ServerB
+	rpcU.ServerB
 	*mq.Producer
 	conn *Conn
 }

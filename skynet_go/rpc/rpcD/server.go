@@ -1,4 +1,4 @@
-package rpcdp
+package rpcD
 
 import (
 	"skp-go/skynet_go/errorCode"
@@ -43,7 +43,7 @@ func NewServer(obj ServerI) *Server {
 	return server
 }
 
-func (server *Server) object() interface{} {
+func (server *Server) Object() interface{} {
 	return server.service
 }
 

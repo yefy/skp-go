@@ -1,4 +1,4 @@
-package rpcEncode
+package rpcE
 
 import (
 	"reflect"
@@ -138,8 +138,12 @@ func NewServer(obj ServerI) *Server {
 	return server
 }
 
-func (server *Server) object() interface{} {
+func (server *Server) Object() interface{} {
 	return server.service.obj
+}
+
+func (server *Server) ObjectName() string {
+	return server.service.objName
 }
 
 func (server *Server) RPC_Start() {

@@ -1,4 +1,4 @@
-package rpc
+package rpcU
 
 import (
 	"container/list"
@@ -9,7 +9,7 @@ import (
 
 //go test -test.bench=. server_cond_benchmark_test.go
 
-type CondTest struct {
+type CondTestEx struct {
 	sendMutex  *sync.Mutex
 	sendCond   *sync.Cond
 	sendList   *list.List
@@ -21,10 +21,11 @@ type CondTest struct {
 	number     int
 	sendNumber int
 	recvNumber int
+	server     *ServerTest
 }
 
-func NewCondTest() *CondTest {
-	c := &CondTest{}
+func NewCondTestEx() *CondTestEx {
+	c := &CondTestEx{}
 	c.sendMutex = new(sync.Mutex)
 	c.sendCond = sync.NewCond(c.sendMutex)
 	c.sendList = list.New()
@@ -36,10 +37,11 @@ func NewCondTest() *CondTest {
 	c.number = 0
 	c.sendNumber = 0
 	c.recvNumber = 0
+	c.server = NewServerTest()
 	return c
 }
 
-func (c *CondTest) Recv() {
+func (c *CondTestEx) Recv() {
 	var sendData interface{} = 0
 	for {
 		c.sendCond.L.Lock()
@@ -54,6 +56,10 @@ func (c *CondTest) Recv() {
 		}
 		//log.Debug("sendData = %+v", sendData.(int))
 		c.sendCond.L.Unlock()
+		in := sendData.(int)
+		out := 0
+		c.server.ExamplePerf(&in, &out)
+
 		if c.typ == "call" {
 			c.recvCond.L.Lock()
 			c.recvList.PushBack(sendData)
@@ -68,16 +74,16 @@ func (c *CondTest) Recv() {
 	}
 }
 
-func (c *CondTest) Start() {
+func (c *CondTestEx) Start() {
 	go c.Recv()
 }
 
-func (c *CondTest) Close() {
+func (c *CondTestEx) Close() {
 	<-c.done
 	//log.Fatal("Close")
 }
 
-func (c *CondTest) Call() error {
+func (c *CondTestEx) Call() error {
 	c.number++
 	sendData := c.number
 	c.sendCond.L.Lock()
@@ -104,7 +110,7 @@ func (c *CondTest) Call() error {
 	return nil
 }
 
-func (c *CondTest) Send() error {
+func (c *CondTestEx) Send() error {
 	c.number++
 	c.sendCond.L.Lock()
 	c.sendList.PushBack(c.number)
@@ -113,9 +119,9 @@ func (c *CondTest) Send() error {
 	return nil
 }
 
-func Benchmark_cond_Call(b *testing.B) {
+func Benchmark_ExamplePerf_condData_Call(b *testing.B) {
 	log.SetLevel(log.Lnone)
-	c := NewCondTest()
+	c := NewCondTestEx()
 	c.typ = "call"
 	c.sendNumber = b.N
 	c.Start()
@@ -126,9 +132,9 @@ func Benchmark_cond_Call(b *testing.B) {
 	c.Close()
 }
 
-func Benchmark_cond_Send(b *testing.B) {
+func Benchmark_ExamplePerf_condData_Send(b *testing.B) {
 	log.SetLevel(log.Lnone)
-	c := NewCondTest()
+	c := NewCondTestEx()
 	c.typ = "send"
 	c.sendNumber = b.N
 	c.Start()

@@ -4,12 +4,12 @@ import (
 	"net"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewCHConsumer(conn *Client) *CHConsumer {
 	c := &CHConsumer{}
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 	c.conn = conn
 	c.Consumer = mq.NewConsumer(c)
 	c.Start()
@@ -17,7 +17,7 @@ func NewCHConsumer(conn *Client) *CHConsumer {
 }
 
 type CHConsumer struct {
-	rpc.ServerB
+	rpcU.ServerB
 	conn *Client
 	*mq.Consumer
 }
@@ -48,7 +48,12 @@ func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 			pendingMsg.pending <- rMqMsg
 		}
 	} else {
-		c.conn.rpcEncode.SendReq(rMqMsg.GetEncode(), rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
+		rpcServer := c.conn.rpcEMap[rMqMsg.GetClass()]
+		if rpcServer == nil {
+			log.Fatal("not rMqMsg.GetClass() = %+v", rMqMsg.GetClass())
+			return
+		}
+		rpcServer.SendReq(rMqMsg.GetEncode(), rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
 			log.Fatal("outStr = %+v, err = %+v", outStr, err)
 			sMqMsg, err := mq.ReplyMqMsg(rMqMsg.GetHarbor(), rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), outStr)
 			if err != nil {

@@ -2,13 +2,13 @@ package mq
 
 import (
 	"net"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 )
 
 func NewConn(tcpConn *net.TCPConn) *Conn {
 	c := &Conn{}
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 	if tcpConn != nil {
 		c.SetTcp(tcpConn)
 	}
@@ -17,7 +17,7 @@ func NewConn(tcpConn *net.TCPConn) *Conn {
 }
 
 type Conn struct {
-	rpc.ServerB
+	rpcU.ServerB
 	mutex      sync.Mutex
 	tcpConn    *net.TCPConn
 	tcpVersion int32
@@ -37,6 +37,10 @@ func (c *Conn) Error(tcpVersion int32) {
 	}
 	c.tcpVersion++
 	c.state = ConnStateErr
+}
+
+func (c *Conn) SetState(state int32) {
+	c.state = state
 }
 
 func (c *Conn) GetState() int32 {

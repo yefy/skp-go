@@ -1,4 +1,4 @@
-package rpc
+package rpcU
 
 import (
 	"reflect"
@@ -104,7 +104,7 @@ func NewServer(obj ServerI) *Server {
 
 	return server
 }
-func (server *Server) object() interface{} {
+func (server *Server) Object() interface{} {
 	return server.service.obj
 }
 

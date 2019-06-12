@@ -1,4 +1,4 @@
-package rpcdp
+package rpcD
 
 import (
 	"fmt"

@@ -4,7 +4,7 @@ import (
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 	"skp-go/skynet_go/utility"
 	"time"
 
@@ -20,12 +20,12 @@ type ConsumerI interface {
 func NewConsumer(cI ConsumerI) *Consumer {
 	c := &Consumer{}
 	c.cI = cI
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 	return c
 }
 
 type Consumer struct {
-	rpc.ServerB
+	rpcU.ServerB
 	cI         ConsumerI
 	vector     *Vector
 	tcpConn    *net.TCPConn

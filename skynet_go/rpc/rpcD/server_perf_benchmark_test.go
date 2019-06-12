@@ -1,4 +1,4 @@
-package rpc
+package rpcD
 
 import (
 	log "skp-go/skynet_go/logger"
@@ -25,10 +25,7 @@ func Benchmark_ExamplePerf_Send(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		in := 1
 		out := 0
-		err := server.Send("ExamplePerf", &in, &out)
-		if err != nil {
-			b.Error()
-		}
+		server.Send("ExamplePerf", &in, &out)
 	}
 
 	server.Stop(true)
@@ -42,23 +39,15 @@ func Benchmark_ExamplePerf_SendReq(b *testing.B) {
 		in := 1
 		out := 0
 
-		err := server.SendReq("ExamplePerf", &in, &out, func(res1 *int, res2 *int) {
+		server.SendReq(func(err error) {
 			if in != out {
 				b.Error()
 			}
-
-			if in != *res1 {
+			if err != nil {
 				b.Error()
 			}
+		}, "ExamplePerf", &in, &out)
 
-			if out != *res2 {
-				b.Error()
-			}
-
-		})
-		if err != nil {
-			b.Error()
-		}
 	}
 
 	server.Stop(true)
@@ -80,36 +69,6 @@ func Benchmark_ExamplePerf_Call(b *testing.B) {
 			b.Error()
 		}
 	}
-	server.Stop(true)
-}
-
-func Benchmark_ExamplePerf_CallReq(b *testing.B) {
-	log.SetLevel(log.Lerr)
-	serverTest := NewServerTest()
-	server := NewServer(serverTest)
-	for i := 0; i < b.N; i++ {
-		in := 1
-		out := 0
-
-		err := server.CallReq("ExamplePerf", &in, &out, func(res1 *int, res2 *int) {
-			if in != out {
-				b.Error()
-			}
-
-			if in != *res1 {
-				b.Error()
-			}
-
-			if out != *res2 {
-				b.Error()
-			}
-
-		})
-		if err != nil {
-			b.Error()
-		}
-	}
-
 	server.Stop(true)
 }
 

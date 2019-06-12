@@ -8,8 +8,9 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
-	"skp-go/skynet_go/rpc/rpcEncode"
+	"skp-go/skynet_go/rpc"
+	"skp-go/skynet_go/rpc/rpcE"
+	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -41,13 +42,9 @@ type PendingMsg struct {
 	pending    chan interface{}
 }
 
-func (p *PendingMsg) Init() {
-
-}
-
 func NewClient(instance string, address string) *Client {
 	c := &Client{}
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 	c.address = address
 	c.pendingSeq = 0
 	c.instance = c.GetInstance(instance)
@@ -67,11 +64,12 @@ func NewClient(instance string, address string) *Client {
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
+	c.rpcEMap = make(map[string]*rpcE.Server)
 	return c
 }
 
 type Client struct {
-	rpc.ServerB
+	rpcU.ServerB
 	address        string
 	harbor         int32
 	instance       string //xx_ip_$$ (模块名)_(ip)_(进程id)
@@ -82,12 +80,13 @@ type Client struct {
 	chConsumer     *CHConsumer
 	topic          string
 	tag            string
-	rpcEncode      *rpcEncode.Server
+	rpcEMap        map[string]*rpcE.Server
 	*mq.Conn
 }
 
-func (c *Client) RegisterServer(obj rpcEncode.ServerI) {
-	c.rpcEncode = rpcEncode.NewServer(obj)
+func (c *Client) RegisterServer(obj rpcE.ServerI) {
+	rpcServer := rpcE.NewServer(obj)
+	c.rpcEMap[rpcServer.ObjectName()] = rpcServer
 }
 
 func (c *Client) Subscribe(topic string, tag string) {
@@ -153,6 +152,7 @@ func (c *Client) Register() error {
 	request.Tag = c.tag
 
 	reply := mq.RegisterReply{}
+
 	msg := Msg{Topic: "Mq", Tag: "*"}
 	if err := c.Call(&msg, "Mq.OnRegister", &request, &reply); err != nil {
 		return errorCode.NewErrCode(0, err.Error())
@@ -161,6 +161,37 @@ func (c *Client) Register() error {
 
 	log.Fatal("c.harbor = %d", c.harbor)
 	return nil
+}
+
+func (c *Client) StopSubscribe() {
+	request := mq.StopSubscribeRequest{}
+	reply := mq.StopSubscribeReply{}
+
+	msg := Msg{Topic: "Mq", Tag: "*"}
+	if err := c.Call(&msg, "Mq.OnStopSubscribe", &request, &reply); err != nil {
+		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
+	}
+
+	c.Conn.SetState(mq.ConnStateStopSubscribe)
+
+	log.Fatal("StopSubscribe")
+}
+
+func (c *Client) WaitPending() bool {
+	isExist := true
+	c.pendingMap.Range(func(k, v interface{}) bool {
+		log.Fatal("k= %+v, v = %+v", k, v)
+		isExist = false
+		return false
+	})
+
+	return isExist
+}
+
+func (c *Client) Close() {
+	//c.StopSubscribe()
+	w := rpc.NewWait()
+	w.Timer(c.WaitPending)
 }
 
 // func (c *Client) Send(msg *Msg, method string, request interface{}) error {

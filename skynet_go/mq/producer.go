@@ -4,7 +4,7 @@ import (
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 	"skp-go/skynet_go/utility"
 	"time"
 
@@ -19,12 +19,12 @@ type ProducerI interface {
 func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
 	p.pI = pI
-	rpc.NewServer(p)
+	rpcU.NewServer(p)
 	return p
 }
 
 type Producer struct {
-	rpc.ServerB
+	rpcU.ServerB
 	pI         ProducerI
 	tcpConn    *net.TCPConn
 	tcpVersion int32

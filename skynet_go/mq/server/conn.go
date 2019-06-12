@@ -4,7 +4,7 @@ import (
 	"net"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
 )
@@ -15,13 +15,13 @@ func NewConn(server *Server, tcpConn *net.TCPConn) *Conn {
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
 	c.Conn = mq.NewConn(tcpConn)
-	rpc.NewServer(c)
+	rpcU.NewServer(c)
 
 	return c
 }
 
 type Conn struct {
-	rpc.ServerB
+	rpcU.ServerB
 	server   *Server
 	harbor   int32
 	instance string //topic_$$

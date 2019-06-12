@@ -6,7 +6,7 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpc"
+	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 	"sync/atomic"
 )
@@ -23,7 +23,7 @@ type TopicConns struct {
 
 func NewServer() *Server {
 	s := &Server{}
-	rpc.NewServer(s)
+	rpcU.NewServer(s)
 	//s.instanceConn = make(map[string]*Conn)
 	//	s.harborConn = make(map[int32]*Conn)
 	s.topicConnsMap = make(map[string]*TopicConns)
@@ -32,7 +32,7 @@ func NewServer() *Server {
 }
 
 type Server struct {
-	rpc.ServerB
+	rpcU.ServerB
 	listen *net.TCPListener
 	harbor int32
 	mutex  sync.Mutex

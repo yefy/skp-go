@@ -3,12 +3,12 @@ package client
 import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpcEncode"
+	"skp-go/skynet_go/rpc/rpcE"
 	"testing"
 )
 
 type Test struct {
-	rpcEncode.ServerB
+	rpcE.ServerB
 }
 
 func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
@@ -36,4 +36,5 @@ func Test_Client1(t *testing.T) {
 	}
 
 	log.Fatal("reply.Harbor = %d", reply.Harbor)
+	//mqClient.Close()
 }
