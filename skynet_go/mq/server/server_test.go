@@ -11,7 +11,7 @@ import (
 func Test_Server(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	server := NewServer()
-	server.Listen(":5672")
+	server.Listen(":5673")
 	wait := make(chan int)
 	<-wait
 }

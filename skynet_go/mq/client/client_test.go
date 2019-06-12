@@ -19,7 +19,7 @@ func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
 
 func Test_Client1(t *testing.T) {
 	log.SetLevel(log.Lerr)
-	mqClient := NewClient("Test", ":5672")
+	mqClient := NewClient("Test", ":5673")
 	mqClient.Subscribe("Test", "*")
 	mqClient.RegisterServer(&Test{})
 	mqClient.Start()

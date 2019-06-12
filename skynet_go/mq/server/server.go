@@ -87,7 +87,7 @@ func (s *Server) Close() {
 func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 	var err error
 	newConn := NewConn(s, tcpConn)
-	if newConn.shConsumer.GetTcpConn() == false {
+	if newConn.shConsumer.Consumer.GetTcp() == false {
 		log.Err("GetTcpConn error")
 		return
 	}
@@ -141,9 +141,9 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 			newConn.Close()
 		} else {
 			replyFunc(newConn)
-			newConn.tcpConn = nil
+			newConn.Conn.ClearTcp()
 			newConn.Close()
-			conn.SetTcpConn(tcpConn)
+			conn.SetTcp(tcpConn)
 		}
 	} else {
 		newConn.instance = request.Instance

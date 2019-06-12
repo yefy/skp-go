@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net"
 	"skp-go/skynet_go/mq"
 )
 
@@ -10,8 +11,7 @@ func NewSQProducer(server *Server, topic string, tag string) *SQProducer {
 	q.topic = topic
 	q.tag = tag
 	q.key = q.topic + "_" + q.tag
-	q.SHProducer = NewSHProducer(nil)
-	q.SHProducerInterface = q
+	q.Producer = mq.NewProducer(q)
 	return q
 }
 
@@ -20,7 +20,8 @@ type SQProducer struct {
 	topic  string
 	tag    string
 	key    string
-	*SHProducer
+	*mq.Producer
+	conn *Conn
 }
 
 func (q *SQProducer) GetConn() bool {
@@ -38,23 +39,27 @@ func (q *SQProducer) GetConn() bool {
 	return false
 }
 
-func (q *SQProducer) GetTcpConn() bool {
+func (q *SQProducer) GetTcp() (*net.TCPConn, int32, bool) {
 	if q.conn == nil {
 		if !q.GetConn() {
-			return false
+			return nil, 0, false
 		}
 	}
 
 	if (q.conn.GetState() & mq.ConnStateStopSubscribe) > 0 {
 		q.conn = nil
-		q.tcpConn = nil
-		return false
+		return nil, 0, false
 	}
 
-	return q.SHProducer.GetTcpConn()
+	if (q.conn.GetState() & mq.ConnStateStart) > 0 {
+		tcpConn, tcpVersion := q.conn.GetTcp()
+		return tcpConn, tcpVersion, true
+	}
+
+	return nil, 0, false
 }
 
-func (q *SQProducer) Error() {
-	q.SHProducer.Error()
+func (q *SQProducer) Error(tcpVersion int32) {
+	q.conn.Error(tcpVersion)
 	q.conn = nil
 }

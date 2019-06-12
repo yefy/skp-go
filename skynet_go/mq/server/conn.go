@@ -14,7 +14,7 @@ func NewConn(server *Server, tcpConn *net.TCPConn) *Conn {
 	c.server = server
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
-	c.SetTcpConn(tcpConn)
+	c.Conn = mq.NewConn(tcpConn)
 	rpc.NewServer(c)
 
 	return c
@@ -22,13 +22,10 @@ func NewConn(server *Server, tcpConn *net.TCPConn) *Conn {
 
 type Conn struct {
 	rpc.ServerBase
-	server     *Server
-	harbor     int32
-	instance   string //topic_$$
-	mutex      sync.Mutex
-	tcpConn    *net.TCPConn
-	tcpVersion int32
-	state      int32
+	server   *Server
+	harbor   int32
+	instance string //topic_$$
+	mutex    sync.Mutex
 
 	topic  string
 	tag    string
@@ -37,25 +34,7 @@ type Conn struct {
 
 	shConsumer *SHConsumer
 	shProducer *SHProducer
-}
-
-func (c *Conn) SendError(tcpVersion int32) {
-	c.RPC_GetServer().Send("OnError", tcpVersion)
-}
-
-func (c *Conn) OnError(tcpVersion int32) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-
-	if tcpVersion != c.tcpVersion {
-		return
-	}
-	if c.tcpConn != nil {
-		c.tcpConn.Close()
-		c.tcpConn = nil
-	}
-	c.tcpVersion++
-	c.state = mq.ConnStateErr
+	*mq.Conn
 }
 
 func (c *Conn) Start() {
@@ -71,14 +50,7 @@ func (c *Conn) Stop() {
 func (c *Conn) Close() {
 	c.Stop()
 	c.RPC_GetServer().Stop(false)
-
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-
-	if c.tcpConn != nil {
-		c.tcpConn.Close()
-		c.tcpConn = nil
-	}
+	c.Conn.Close()
 }
 
 func (c *Conn) SendOnCloseAll() {
@@ -124,28 +96,4 @@ func (c *Conn) IsSubscribeAll() bool {
 	}
 
 	return false
-}
-
-func (c *Conn) GetState() int32 {
-	return c.state
-}
-
-func (c *Conn) GetTcpConn() (*net.TCPConn, int32) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	return c.tcpConn, c.tcpVersion
-}
-
-func (c *Conn) SetTcpConn(tcpConn *net.TCPConn) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-
-	if c.tcpConn != nil {
-		c.tcpConn.Close()
-		c.tcpConn = nil
-	}
-
-	c.tcpConn = tcpConn
-	c.tcpVersion++
-	c.state = mq.ConnStateStart
 }

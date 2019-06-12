@@ -45,7 +45,6 @@ func (p *PendingMsg) Init() {
 
 }
 
-//=====================Client
 func NewClient(instance string, address string) *Client {
 	c := &Client{}
 	rpc.NewServer(c)
@@ -59,9 +58,12 @@ func NewClient(instance string, address string) *Client {
 	},
 	}
 
-	if err := c.DialConn(); err != nil {
+	tcpConn, err := c.DialConn()
+	if err != nil {
 		return nil
 	}
+
+	c.Conn = mq.NewConn(tcpConn)
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
@@ -71,8 +73,6 @@ func NewClient(instance string, address string) *Client {
 type Client struct {
 	rpc.ServerBase
 	address        string
-	mutex          sync.Mutex
-	tcpConn        *net.TCPConn
 	harbor         int32
 	instance       string //xx_ip_$$ (模块名)_(ip)_(进程id)
 	pendingSeq     uint64
@@ -83,6 +83,7 @@ type Client struct {
 	topic          string
 	tag            string
 	rpcEncode      *rpcEncode.Server
+	*mq.Conn
 }
 
 func (c *Client) RegisterServer(obj rpcEncode.ServerInterface) {
@@ -130,27 +131,18 @@ func (c *Client) getIP() string {
 	return ""
 }
 
-func (c *Client) DialConn() error {
+func (c *Client) DialConn() (*net.TCPConn, error) {
 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
 	if tcpAddrErr != nil {
-		return log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
+		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
 	}
 
 	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
 	if tcpConnErr != nil {
-		return log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
+		return nil, log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
 	}
 
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	c.tcpConn = tcpConn
-	return nil
-}
-
-func (c *Client) GetTcpConn() *net.TCPConn {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-	return c.tcpConn
+	return tcpConn, nil
 }
 
 func (c *Client) Register() error {
@@ -214,7 +206,8 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	sMqMsg.Encode = proto.Int32(p.reqEncode)
 	sMqMsg.Body = proto.String(p.reqBody)
 
-	c.chProducer.RPC_GetServer().Send("SendMqMsg", sMqMsg)
+	c.chProducer.SendWriteMqMsg(sMqMsg)
+	//c.chProducer.RPC_GetServer().Send("SendMqMsg", sMqMsg)
 	rMqMsgI := <-p.pending
 	rMqMsg := rMqMsgI.(*mq.MqMsg)
 
