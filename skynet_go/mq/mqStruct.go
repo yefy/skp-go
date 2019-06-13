@@ -11,8 +11,5 @@ type RegisterReply struct {
 	Harbor int32
 }
 
-type StopSubscribeRequest struct {
-}
-
-type StopSubscribeReply struct {
+type NilStruct struct {
 }

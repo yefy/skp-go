@@ -164,8 +164,8 @@ func (c *Client) Register() error {
 }
 
 func (c *Client) StopSubscribe() {
-	request := mq.StopSubscribeRequest{}
-	reply := mq.StopSubscribeReply{}
+	request := mq.NilStruct{}
+	reply := mq.NilStruct{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
 	if err := c.Call(&msg, "Mq.OnStopSubscribe", &request, &reply); err != nil {
@@ -175,6 +175,22 @@ func (c *Client) StopSubscribe() {
 	c.Conn.SetState(mq.ConnStateStopSubscribe)
 
 	log.Fatal("StopSubscribe")
+}
+
+func (c *Client) Close() {
+	c.Conn.SetState(mq.ConnStateStopping)
+
+	request := mq.NilStruct{}
+	reply := mq.NilStruct{}
+
+	msg := Msg{Topic: "Mq", Tag: "*"}
+	if err := c.Call(&msg, "Mq.OnClose", &request, &reply); err != nil {
+		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
+	}
+
+	c.Conn.SetState(mq.ConnStateStop)
+
+	log.Fatal("Close")
 }
 
 func (c *Client) WaitPending() bool {
@@ -188,10 +204,11 @@ func (c *Client) WaitPending() bool {
 	return isExist
 }
 
-func (c *Client) Close() {
+func (c *Client) Exit() {
 	//c.StopSubscribe()
 	w := rpc.NewWait()
 	w.Timer(c.WaitPending)
+	//c.Close()
 }
 
 // func (c *Client) Send(msg *Msg, method string, request interface{}) error {
