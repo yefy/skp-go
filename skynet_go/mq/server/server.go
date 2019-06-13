@@ -11,22 +11,22 @@ import (
 	"sync/atomic"
 )
 
-func NewTopicConns() *TopicConns {
-	t := &TopicConns{}
-	t.harborConn = make(map[int32]*Conn)
+func NewTopicClients() *TopicClients {
+	t := &TopicClients{}
+	t.harborClient = make(map[int32]*Client)
 	return t
 }
 
-type TopicConns struct {
-	harborConn map[int32]*Conn
+type TopicClients struct {
+	harborClient map[int32]*Client
 }
 
 func NewServer() *Server {
 	s := &Server{}
 	rpcU.NewServer(s)
-	//s.instanceConn = make(map[string]*Conn)
-	//	s.harborConn = make(map[int32]*Conn)
-	s.topicConnsMap = make(map[string]*TopicConns)
+	//s.instanceClient = make(map[string]*Client)
+	//	s.harborClient = make(map[int32]*Client)
+	s.topicClientsMap = make(map[string]*TopicClients)
 	s.topicTag = make(map[string]*SQProducer)
 	return s
 }
@@ -36,12 +36,12 @@ type Server struct {
 	listen *net.TCPListener
 	harbor int32
 	mutex  sync.Mutex
-	//instanceConn map[string]*Conn
-	instanceConn sync.Map
-	//harborConn map[int32]*Conn
-	harborConn    sync.Map
-	topicConnsMap map[string]*TopicConns
-	topicTag      map[string]*SQProducer
+	//instanceClient map[string]*Client
+	instanceClient sync.Map
+	//harborClient map[int32]*Client
+	harborClient    sync.Map
+	topicClientsMap map[string]*TopicClients
+	topicTag        map[string]*SQProducer
 }
 
 func (s *Server) Listen(address string) error {
@@ -86,97 +86,97 @@ func (s *Server) Close() {
 
 func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 	var err error
-	newConn := NewConn(s, tcpConn)
-	if newConn.shConsumer.Consumer.GetTcp() == false {
-		log.Err("GetTcpConn error")
+	newClient := NewClient(s, tcpConn)
+	if newClient.shConsumer.Consumer.GetTcp() == false {
+		log.Err("GetTcp error")
 		return
 	}
 
-	rMqMsg, err := newConn.shConsumer.ReadMqMsg(3)
+	rMqMsg, err := newClient.shConsumer.ReadMqMsg(3)
 	if err != nil {
-		newConn.Close()
+		newClient.Close()
 		return
 	}
 
 	if rMqMsg.GetClass() != "Mq" ||
 		rMqMsg.GetMethod() != "OnRegister" {
 		log.Err("rMqMsg.Class != Mq || rMqMsg.Method != Register , rMqMsg = %+v", rMqMsg)
-		newConn.Close()
+		newClient.Close()
 		return
 	}
 
 	request := mq.RegisteRequest{}
 	if err := encodes.DecodeBody(rMqMsg.GetEncode(), rMqMsg.GetBody(), &request); err != nil {
-		newConn.Close()
+		newClient.Close()
 		return
 	}
 	log.Fatal("request = %+v", request)
 
 	if request.Instance == "" {
 		log.Err("not request.Instance")
-		newConn.Close()
+		newClient.Close()
 		return
 	}
 
-	replyFunc := func(replyConn *Conn) {
+	replyFunc := func(replyClient *Client) {
 		reply := mq.RegisterReply{}
-		reply.Harbor = replyConn.harbor
-		sMqMsg, err := mq.ReplyMqMsg(replyConn.harbor, rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), &reply)
+		reply.Harbor = replyClient.harbor
+		sMqMsg, err := mq.ReplyMqMsg(replyClient.harbor, rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), &reply)
 		if err == nil {
-			replyConn.shProducer.WriteMqMsg(sMqMsg)
+			replyClient.shProducer.WriteMqMsg(sMqMsg)
 		}
 	}
 
 	if request.Harbor > 0 {
-		connI, connOk := s.instanceConn.Load(request.Instance)
+		connI, connOk := s.instanceClient.Load(request.Instance)
 		if connOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
-			newConn.Close()
+			newClient.Close()
 			return
 		}
 
-		conn := connI.(*Conn)
+		conn := connI.(*Client)
 		if conn.harbor != request.Harbor {
 			log.Err("conn.harbor != request.Harbor, conn.harbor = %+v, request.Harbor = %+v", conn.harbor, request.Harbor)
-			newConn.Close()
+			newClient.Close()
 		} else {
-			replyFunc(newConn)
-			newConn.Conn.ClearTcp()
-			newConn.Close()
+			replyFunc(newClient)
+			newClient.Client.ClearTcp()
+			newClient.Close()
 			conn.SetTcp(tcpConn)
 		}
 	} else {
-		newConn.instance = request.Instance
-		newConn.harbor = atomic.AddInt32(&s.harbor, 1)
-		newConn.Subscribe(request.Topic, request.Tag)
+		newClient.instance = request.Instance
+		newClient.harbor = atomic.AddInt32(&s.harbor, 1)
+		newClient.Subscribe(request.Topic, request.Tag)
 
-		_, connOk := s.instanceConn.LoadOrStore(request.Instance, newConn)
+		_, connOk := s.instanceClient.LoadOrStore(request.Instance, newClient)
 		if connOk {
 			log.Err("exist request.Instance = %+v", request.Instance)
-			newConn.Close()
+			newClient.Close()
 			return
 		}
 		log.Fatal("1111111111111111")
-		replyFunc(newConn)
-		topicConns := s.topicConnsMap[newConn.topic]
-		if topicConns == nil {
-			topicConns = NewTopicConns()
-			s.topicConnsMap[newConn.topic] = topicConns
+		replyFunc(newClient)
+		topicClients := s.topicClientsMap[newClient.topic]
+		if topicClients == nil {
+			topicClients = NewTopicClients()
+			s.topicClientsMap[newClient.topic] = topicClients
 		} else {
-			if newConn.IsSubscribeAll() {
+			if newClient.IsSubscribeAll() {
 				log.Fatal("IsSubscribeAll")
-				//topicConnsMap all conn  close
-				for harbor, conn := range topicConns.harborConn {
+				//topicClientsMap all conn  close
+				for harbor, conn := range topicClients.harborClient {
 					log.Fatal("SendOnCloseAll harbor", harbor)
 					conn.SendOnCloseAll()
 				}
-				topicConns = NewTopicConns()
-				s.topicConnsMap[newConn.topic] = topicConns
+				topicClients = NewTopicClients()
+				s.topicClientsMap[newClient.topic] = topicClients
 			} else {
 				//关闭一样的tag conn
 				var delHarbors []int32
-				for harbor, conn := range topicConns.harborConn {
-					for _, tag := range newConn.tags {
+				for harbor, conn := range topicClients.harborClient {
+					for _, tag := range newClient.tags {
 						if conn.IsSubscribe(tag) {
 							log.Fatal("SendOnCloseAll harbor", harbor)
 							conn.SendOnCloseAll()
@@ -187,14 +187,14 @@ func (s *Server) OnRegister(tcpConn *net.TCPConn) {
 				}
 
 				for _, harbor := range delHarbors {
-					delete(topicConns.harborConn, harbor)
+					delete(topicClients.harborClient, harbor)
 				}
 			}
 		}
 
-		topicConns.harborConn[newConn.harbor] = newConn
+		topicClients.harborClient[newClient.harbor] = newClient
 
-		s.harborConn.Store(newConn.harbor, newConn)
-		newConn.Start()
+		s.harborClient.Store(newClient.harbor, newClient)
+		newClient.Start()
 	}
 }

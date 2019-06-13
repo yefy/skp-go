@@ -60,7 +60,7 @@ func NewClient(instance string, address string) *Client {
 		return nil
 	}
 
-	c.Conn = mq.NewConn(tcpConn)
+	c.Client = mq.NewClient(tcpConn)
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
@@ -81,7 +81,7 @@ type Client struct {
 	topic          string
 	tag            string
 	rpcEMap        map[string]*rpcE.Server
-	*mq.Conn
+	*mq.Client
 }
 
 func (c *Client) RegisterServer(obj rpcE.ServerI) {
@@ -172,13 +172,13 @@ func (c *Client) StopSubscribe() {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	c.Conn.SetState(mq.ConnStateStopSubscribe)
+	c.Client.SetState(mq.ClientStateStopSubscribe)
 
 	log.Fatal("StopSubscribe")
 }
 
 func (c *Client) Close() {
-	c.Conn.SetState(mq.ConnStateStopping)
+	c.Client.SetState(mq.ClientStateStopping)
 
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
@@ -188,7 +188,7 @@ func (c *Client) Close() {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	c.Conn.SetState(mq.ConnStateStop)
+	c.Client.SetState(mq.ClientStateStop)
 
 	log.Fatal("Close")
 }

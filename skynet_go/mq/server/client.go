@@ -9,18 +9,18 @@ import (
 	"sync"
 )
 
-func NewConn(server *Server, tcpConn *net.TCPConn) *Conn {
-	c := &Conn{}
+func NewClient(server *Server, tcpConn *net.TCPConn) *Client {
+	c := &Client{}
 	c.server = server
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
-	c.Conn = mq.NewConn(tcpConn)
+	c.Client = mq.NewClient(tcpConn)
 	rpcU.NewServer(c)
 
 	return c
 }
 
-type Conn struct {
+type Client struct {
 	rpcU.ServerB
 	server   *Server
 	harbor   int32
@@ -34,34 +34,34 @@ type Conn struct {
 
 	shConsumer *SHConsumer
 	shProducer *SHProducer
-	*mq.Conn
+	*mq.Client
 }
 
-func (c *Conn) Start() {
+func (c *Client) Start() {
 	c.shConsumer.Start()
 	c.shProducer.Start()
 }
 
-func (c *Conn) Stop() {
+func (c *Client) Stop() {
 	c.shConsumer.Stop()
 	c.shProducer.Stop()
 }
 
-func (c *Conn) Close() {
+func (c *Client) Close() {
 	c.Stop()
 	c.RPC_GetServer().Stop(false)
-	c.Conn.Close()
+	c.Client.Close()
 }
 
-func (c *Conn) SendOnCloseAll() {
+func (c *Client) SendOnCloseAll() {
 	c.RPC_GetServer().Send("OnCloseAll")
 }
 
-func (c *Conn) OnCloseAll() {
+func (c *Client) OnCloseAll() {
 	c.Close()
 }
 
-func (c *Conn) Subscribe(topic string, tag string) {
+func (c *Client) Subscribe(topic string, tag string) {
 	c.topic = strings.Trim(topic, "\t\n ")
 	c.tag = strings.Trim(tag, "\t\n ")
 	if c.tag == "*" {
@@ -74,7 +74,7 @@ func (c *Conn) Subscribe(topic string, tag string) {
 	}
 }
 
-func (c *Conn) IsSubscribe(tag string) bool {
+func (c *Client) IsSubscribe(tag string) bool {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
@@ -90,7 +90,7 @@ func (c *Conn) IsSubscribe(tag string) bool {
 	return false
 }
 
-func (c *Conn) IsSubscribeAll() bool {
+func (c *Client) IsSubscribeAll() bool {
 	if c.tag == "*" {
 		return true
 	}

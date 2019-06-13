@@ -4,6 +4,7 @@ import (
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/mq/conn"
 	_ "strings"
 	"time"
 )
@@ -11,7 +12,8 @@ import (
 type Vector struct {
 	buffer     []byte
 	connBuffer []byte
-	tcpConn    *net.TCPConn
+	//tcpConn    *net.TCPConn
+	tcpConn conn.ConnI
 }
 
 func NewVector() *Vector {

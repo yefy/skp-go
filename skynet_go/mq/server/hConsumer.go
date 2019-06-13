@@ -7,9 +7,9 @@ import (
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
-func NewSHConsumer(conn *Conn) *SHConsumer {
+func NewSHConsumer(client *Client) *SHConsumer {
 	c := &SHConsumer{}
-	c.conn = conn
+	c.client = client
 	c.Consumer = mq.NewConsumer(c)
 	rpcU.NewServer(c)
 	return c
@@ -17,13 +17,13 @@ func NewSHConsumer(conn *Conn) *SHConsumer {
 
 type SHConsumer struct {
 	rpcU.ServerB
-	conn *Conn
+	client *Client
 	*mq.Consumer
 }
 
 func (c *SHConsumer) GetTcp() (*net.TCPConn, int32, bool) {
-	if (c.conn.GetState() & mq.ConnStateStart) > 0 {
-		tcpConn, tcpVersion := c.conn.GetTcp()
+	if (c.client.GetState() & mq.ClientStateStart) > 0 {
+		tcpConn, tcpVersion := c.client.GetTcp()
 		return tcpConn, tcpVersion, true
 	}
 
@@ -31,27 +31,27 @@ func (c *SHConsumer) GetTcp() (*net.TCPConn, int32, bool) {
 }
 
 func (c *SHConsumer) Error(tcpVersion int32) {
-	c.conn.Error(tcpVersion)
+	c.client.Error(tcpVersion)
 }
 
 func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
 	if mqMsg.GetTyp() == mq.TypeRespond {
 		harbor := mqMsg.GetHarbor()
-		harborConnI, ok := c.conn.server.harborConn.Load(harbor)
+		harborClientI, ok := c.client.server.harborClient.Load(harbor)
 		if ok {
-			harborConn := harborConnI.(*Conn)
-			harborConn.shProducer.SendWriteMqMsg(mqMsg)
+			harborClient := harborClientI.(*Client)
+			harborClient.shProducer.SendWriteMqMsg(mqMsg)
 		} else {
 			//这里需要保存mqMsg用于排查问题
 			log.Fatal("not harbor = %d", harbor)
 		}
 	} else {
 		key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
-		q := c.conn.server.topicTag[key]
+		q := c.client.server.topicTag[key]
 		if q == nil {
 			log.Fatal("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
-			q = NewSQProducer(c.conn.server, mqMsg.GetTopic(), mqMsg.GetTag())
-			c.conn.server.topicTag[key] = q
+			q = NewSQProducer(c.client.server, mqMsg.GetTopic(), mqMsg.GetTag())
+			c.client.server.topicTag[key] = q
 		}
 		q.SendWriteMqMsg(mqMsg)
 	}

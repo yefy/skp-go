@@ -21,38 +21,38 @@ type SQProducer struct {
 	tag    string
 	key    string
 	*mq.Producer
-	conn *Conn
+	client *Client
 }
 
-func (q *SQProducer) GetConn() bool {
-	topicConns := q.server.topicConnsMap[q.topic]
-	if topicConns != nil {
-		for _, v := range topicConns.harborConn {
+func (q *SQProducer) GetClient() bool {
+	topicClients := q.server.topicClientsMap[q.topic]
+	if topicClients != nil {
+		for _, v := range topicClients.harborClient {
 			if v.IsSubscribe(q.tag) {
-				q.conn = v
+				q.client = v
 				return true
 			}
 		}
 	}
 
-	q.conn = nil
+	q.client = nil
 	return false
 }
 
 func (q *SQProducer) GetTcp() (*net.TCPConn, int32, bool) {
-	if q.conn == nil {
-		if !q.GetConn() {
+	if q.client == nil {
+		if !q.GetClient() {
 			return nil, 0, false
 		}
 	}
 
-	if (q.conn.GetState() & mq.ConnStateStopSubscribe) > 0 {
-		q.conn = nil
+	if (q.client.GetState() & mq.ClientStateStopSubscribe) > 0 {
+		q.client = nil
 		return nil, 0, false
 	}
 
-	if (q.conn.GetState() & mq.ConnStateStart) > 0 {
-		tcpConn, tcpVersion := q.conn.GetTcp()
+	if (q.client.GetState() & mq.ClientStateStart) > 0 {
+		tcpConn, tcpVersion := q.client.GetTcp()
 		return tcpConn, tcpVersion, true
 	}
 
@@ -60,6 +60,6 @@ func (q *SQProducer) GetTcp() (*net.TCPConn, int32, bool) {
 }
 
 func (q *SQProducer) Error(tcpVersion int32) {
-	q.conn.Error(tcpVersion)
-	q.conn = nil
+	q.client.Error(tcpVersion)
+	q.client = nil
 }

@@ -7,10 +7,10 @@ import (
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
-func NewCHConsumer(conn *Client) *CHConsumer {
+func NewCHConsumer(cient *Client) *CHConsumer {
 	c := &CHConsumer{}
 	rpcU.NewServer(c)
-	c.conn = conn
+	c.cient = cient
 	c.Consumer = mq.NewConsumer(c)
 	c.Start()
 	return c
@@ -18,13 +18,13 @@ func NewCHConsumer(conn *Client) *CHConsumer {
 
 type CHConsumer struct {
 	rpcU.ServerB
-	conn *Client
+	cient *Client
 	*mq.Consumer
 }
 
 func (c *CHConsumer) GetTcp() (*net.TCPConn, int32, bool) {
-	if (c.conn.GetState() & mq.ConnStateStart) > 0 {
-		tcpConn, tcpVersion := c.conn.GetTcp()
+	if (c.cient.GetState() & mq.ClientStateStart) > 0 {
+		tcpConn, tcpVersion := c.cient.GetTcp()
 		return tcpConn, tcpVersion, true
 	}
 
@@ -32,23 +32,23 @@ func (c *CHConsumer) GetTcp() (*net.TCPConn, int32, bool) {
 }
 
 func (c *CHConsumer) Error(tcpVersion int32) {
-	c.conn.Error(tcpVersion)
+	c.cient.Error(tcpVersion)
 }
 
 func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 	if rMqMsg.GetTyp() == mq.TypeRespond {
-		pendingMsgI, ok := c.conn.pendingMap.Load(rMqMsg.GetPendingSeq())
+		pendingMsgI, ok := c.cient.pendingMap.Load(rMqMsg.GetPendingSeq())
 		if !ok {
 			log.Fatal("not rMqMsg.PendingSeq = %d", rMqMsg.PendingSeq)
 			return
 		}
-		c.conn.pendingMap.Delete(rMqMsg.GetPendingSeq())
+		c.cient.pendingMap.Delete(rMqMsg.GetPendingSeq())
 		pendingMsg := pendingMsgI.(*PendingMsg)
 		if pendingMsg.typ == mq.TypeCall {
 			pendingMsg.pending <- rMqMsg
 		}
 	} else {
-		rpcServer := c.conn.rpcEMap[rMqMsg.GetClass()]
+		rpcServer := c.cient.rpcEMap[rMqMsg.GetClass()]
 		if rpcServer == nil {
 			log.Fatal("not rMqMsg.GetClass() = %+v", rMqMsg.GetClass())
 			return
@@ -60,7 +60,7 @@ func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 				log.Err(err.Error())
 				return
 			}
-			c.conn.chProducer.SendWriteMqMsg(sMqMsg)
+			c.cient.chProducer.SendWriteMqMsg(sMqMsg)
 		})
 	}
 }
