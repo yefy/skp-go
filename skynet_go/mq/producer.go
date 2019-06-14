@@ -1,9 +1,9 @@
 package mq
 
 import (
-	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"skp-go/skynet_go/utility"
 	"time"
@@ -12,7 +12,7 @@ import (
 )
 
 type ProducerI interface {
-	GetTcp() (*net.TCPConn, int32, bool)
+	GetTcp() (conn.ConnI, int32, bool)
 	Error(int32)
 }
 
@@ -26,7 +26,7 @@ func NewProducer(pI ProducerI) *Producer {
 type Producer struct {
 	rpcU.ServerB
 	pI         ProducerI
-	tcpConn    *net.TCPConn
+	tcpConn    conn.ConnI
 	tcpVersion int32
 }
 

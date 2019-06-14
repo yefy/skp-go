@@ -8,6 +8,8 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/mq/conn"
+	"skp-go/skynet_go/mq/server"
 	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpc/rpcE"
 	"skp-go/skynet_go/rpc/rpcU"
@@ -54,13 +56,40 @@ func NewClient(instance string, address string) *Client {
 		return msg
 	},
 	}
+	c.dialConnI = conn.NewDialTcpConn(address)
 
-	tcpConn, err := c.DialConn()
+	tcpConn, err := c.dialConnI.Connect()
 	if err != nil {
 		return nil
 	}
 
 	c.Client = mq.NewClient(tcpConn)
+
+	c.chProducer = NewCHProducer(c)
+	c.chConsumer = NewCHConsumer(c)
+	c.rpcEMap = make(map[string]*rpcE.Server)
+	return c
+}
+
+func NewLocalClient(instance string, server *server.Server) *Client {
+	c := &Client{}
+	rpcU.NewServer(c)
+	c.pendingSeq = 0
+	c.instance = c.GetInstance(instance)
+	c.pendingMsgPool = &sync.Pool{New: func() interface{} {
+		msg := &PendingMsg{}
+		msg.pending = make(chan interface{}, 1)
+		return msg
+	},
+	}
+	c.dialConnI = conn.NewDialMqConn()
+	tcpConn, err := c.dialConnI.Connect()
+	if err != nil {
+		return nil
+	}
+	c.Client = mq.NewClient(tcpConn)
+
+	server.OnMqRegister(c.dialConnI.GetS())
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
@@ -82,6 +111,7 @@ type Client struct {
 	tag            string
 	rpcEMap        map[string]*rpcE.Server
 	*mq.Client
+	dialConnI conn.DialConnI
 }
 
 func (c *Client) RegisterServer(obj rpcE.ServerI) {
@@ -130,7 +160,7 @@ func (c *Client) getIP() string {
 	return ""
 }
 
-func (c *Client) DialConn() (*net.TCPConn, error) {
+func (c *Client) DialConn() (conn.ConnI, error) {
 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
 	if tcpAddrErr != nil {
 		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))

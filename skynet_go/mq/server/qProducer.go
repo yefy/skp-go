@@ -1,8 +1,8 @@
 package server
 
 import (
-	"net"
 	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/mq/conn"
 )
 
 func NewSQProducer(server *Server, topic string, tag string) *SQProducer {
@@ -39,7 +39,7 @@ func (q *SQProducer) GetClient() bool {
 	return false
 }
 
-func (q *SQProducer) GetTcp() (*net.TCPConn, int32, bool) {
+func (q *SQProducer) GetTcp() (conn.ConnI, int32, bool) {
 	if q.client == nil {
 		if !q.GetClient() {
 			return nil, 0, false

@@ -1,8 +1,8 @@
 package client
 
 import (
-	"net"
 	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
@@ -20,7 +20,7 @@ type CHProducer struct {
 	cient *Client
 }
 
-func (p *CHProducer) GetTcp() (*net.TCPConn, int32, bool) {
+func (p *CHProducer) GetTcp() (conn.ConnI, int32, bool) {
 	if (p.cient.GetState() & mq.ClientStateStart) > 0 {
 		tcpConn, tcpVersion := p.cient.GetTcp()
 		return tcpConn, tcpVersion, true

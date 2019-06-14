@@ -12,8 +12,7 @@ import (
 type Vector struct {
 	buffer     []byte
 	connBuffer []byte
-	//tcpConn    *net.TCPConn
-	tcpConn conn.ConnI
+	tcpConn    conn.ConnI
 }
 
 func NewVector() *Vector {
@@ -23,7 +22,7 @@ func NewVector() *Vector {
 	return v
 }
 
-func (v *Vector) SetConn(tcpConn *net.TCPConn) {
+func (v *Vector) SetConn(tcpConn conn.ConnI) {
 	v.tcpConn = tcpConn
 }
 

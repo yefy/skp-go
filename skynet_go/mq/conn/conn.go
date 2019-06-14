@@ -1,6 +1,9 @@
 package conn
 
 import (
+	"net"
+	"skp-go/skynet_go/errorCode"
+	log "skp-go/skynet_go/logger"
 	"time"
 )
 
@@ -31,7 +34,7 @@ func (c *ConnChan) Write(b []byte) (int, error) {
 func (c *ConnChan) Read(b []byte) (int, error) {
 	rb := <-c.cc.Cache
 	copy(b, rb)
-	return len(b), nil
+	return len(rb), nil
 }
 
 func (c *ConnChan) Close() error {
@@ -65,4 +68,56 @@ func (c *Conn) getC() ConnI {
 
 func (c *Conn) getS() ConnI {
 	return c.s
+}
+
+type DialConnI interface {
+	Connect() (ConnI, error)
+	GetS() ConnI
+}
+
+func NewDialMqConn() *DialMqConn {
+	d := &DialMqConn{}
+	return d
+}
+
+type DialMqConn struct {
+	conn *Conn
+}
+
+func (d *DialMqConn) Connect() (ConnI, error) {
+	d.conn = NewConn()
+	return d.conn.getC(), nil
+}
+
+func (d *DialMqConn) GetS() ConnI {
+	return d.conn.getS()
+}
+
+func NewDialTcpConn(address string) *DialTcpConn {
+	d := &DialTcpConn{}
+	d.address = address
+	return d
+}
+
+type DialTcpConn struct {
+	address string
+	conn    *net.TCPConn
+}
+
+func (d *DialTcpConn) Connect() (ConnI, error) {
+	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", d.address)
+	if tcpAddrErr != nil {
+		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
+	}
+
+	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
+	if tcpConnErr != nil {
+		return nil, log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
+	}
+	d.conn = tcpConn
+	return tcpConn, nil
+}
+
+func (d *DialTcpConn) GetS() ConnI {
+	return nil
 }

@@ -1,9 +1,9 @@
 package client
 
 import (
-	"net"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
@@ -22,7 +22,7 @@ type CHConsumer struct {
 	*mq.Consumer
 }
 
-func (c *CHConsumer) GetTcp() (*net.TCPConn, int32, bool) {
+func (c *CHConsumer) GetTcp() (conn.ConnI, int32, bool) {
 	if (c.cient.GetState() & mq.ClientStateStart) > 0 {
 		tcpConn, tcpVersion := c.cient.GetTcp()
 		return tcpConn, tcpVersion, true

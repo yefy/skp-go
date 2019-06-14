@@ -6,6 +6,7 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
+	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 	"sync/atomic"
@@ -84,7 +85,11 @@ func (s *Server) Close() {
 	s.RPC_GetServer().Stop(true)
 }
 
-func (s *Server) OnRegister(tcpConn *net.TCPConn) {
+func (s *Server) OnMqRegister(tcpConn conn.ConnI) {
+	go s.OnRegister(tcpConn)
+}
+
+func (s *Server) OnRegister(tcpConn conn.ConnI) {
 	var err error
 	newClient := NewClient(s, tcpConn)
 	if newClient.shConsumer.Consumer.GetTcp() == false {

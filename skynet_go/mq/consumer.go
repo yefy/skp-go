@@ -1,11 +1,9 @@
 package mq
 
 import (
-	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-
-	//"skp-go/skynet_go/mq/conn"
+	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"skp-go/skynet_go/utility"
 	"time"
@@ -15,7 +13,7 @@ import (
 
 type ConsumerI interface {
 	DoMqMsg(*MqMsg)
-	GetTcp() (*net.TCPConn, int32, bool)
+	GetTcp() (conn.ConnI, int32, bool)
 	Error(int32)
 }
 
@@ -28,10 +26,9 @@ func NewConsumer(cI ConsumerI) *Consumer {
 
 type Consumer struct {
 	rpcU.ServerB
-	cI      ConsumerI
-	vector  *Vector
-	tcpConn *net.TCPConn
-	//tcpConn    conn.ConnI
+	cI         ConsumerI
+	vector     *Vector
+	tcpConn    conn.ConnI
 	tcpVersion int32
 }
 

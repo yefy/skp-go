@@ -1,4 +1,4 @@
-package server
+package mq
 
 import (
 	log "skp-go/skynet_go/logger"
