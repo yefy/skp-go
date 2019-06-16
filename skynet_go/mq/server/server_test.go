@@ -10,7 +10,8 @@ import (
 	"time"
 )
 
-//taskkill /im mq.test.exe /f
+//taskkill /im server.test.exe /f
+//taskkill /im client.test.exe /f
 //go test server_test.go server.go mqMsg.pb.go vector.go
 
 type Test struct {

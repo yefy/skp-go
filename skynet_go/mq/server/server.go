@@ -74,7 +74,7 @@ func (s *Server) Accept() {
 
 		log.Fatal("本地IP地址: %s, 远程IP地址:%s", tcpConn.LocalAddr(), tcpConn.RemoteAddr())
 		//输出：220.181.111.188:80
-		go s.OnRegister(tcpConn)
+		go s.OnConn(tcpConn)
 	}
 }
 
@@ -85,34 +85,51 @@ func (s *Server) Close() {
 	s.RPC_GetServer().Stop(true)
 }
 
-func (s *Server) OnMqRegister(tcpConn conn.ConnI) {
-	go s.OnRegister(tcpConn)
+func (s *Server) ClientError(c *Client) {
+	c.Close()
 }
 
-func (s *Server) OnRegister(tcpConn conn.ConnI) {
-	var err error
+func (s *Server) OnRegisterMqMsg(c *Client, mqMsg *mq.MqMsg) {
+	if mqMsg.GetTopic() != "Mq" || mqMsg.GetTag() != "*" {
+		s.ClientError(c)
+		return
+	}
+
+	if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientRegister" {
+		s.OnClientRegister(c, mqMsg)
+	} else if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientStopSubscribe" {
+		s.OnClientStopSubscribe(c, mqMsg)
+	} else if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientClose" {
+		s.OnClientClose(c, mqMsg)
+	} else {
+		log.Err("not class = %+v or method = %+v", mqMsg.GetClass(), mqMsg.GetMethod())
+	}
+}
+
+func (s *Server) OnRegisterLocal(tcpConn conn.ConnI) {
+	s.OnConn(tcpConn)
+}
+
+func (s *Server) OnConn(tcpConn conn.ConnI) {
 	newClient := NewClient(s, tcpConn)
-	if newClient.shConsumer.Consumer.GetTcp() == false {
-		log.Err("GetTcp error")
-		return
-	}
+	newClient.Start()
+}
 
-	rMqMsg, err := newClient.shConsumer.ReadMqMsg(3)
-	if err != nil {
-		newClient.Close()
-		return
-	}
+func (s *Server) OnClientStopSubscribe(c *Client, rMqMsg *mq.MqMsg) {
+	c.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
+}
 
-	if rMqMsg.GetClass() != "Mq" ||
-		rMqMsg.GetMethod() != "OnRegister" {
-		log.Err("rMqMsg.Class != Mq || rMqMsg.Method != Register , rMqMsg = %+v", rMqMsg)
-		newClient.Close()
-		return
-	}
+func (s *Server) OnClientClose(c *Client, rMqMsg *mq.MqMsg) {
+	c.SetState(mq.ClientStateStop)
+	c.Close()
 
+}
+
+func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
+	newClient := c
 	request := mq.RegisteRequest{}
 	if err := encodes.DecodeBody(rMqMsg.GetEncode(), rMqMsg.GetBody(), &request); err != nil {
-		newClient.Close()
+		c.Close()
 		return
 	}
 	log.Fatal("request = %+v", request)
@@ -133,6 +150,7 @@ func (s *Server) OnRegister(tcpConn conn.ConnI) {
 	}
 
 	if request.Harbor > 0 {
+		tcpConn, _ := newClient.GetTcp()
 		connI, connOk := s.instanceClient.Load(request.Instance)
 		if connOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
@@ -200,6 +218,6 @@ func (s *Server) OnRegister(tcpConn conn.ConnI) {
 		topicClients.harborClient[newClient.harbor] = newClient
 
 		s.harborClient.Store(newClient.harbor, newClient)
-		newClient.Start()
+		//newClient.Start()
 	}
 }

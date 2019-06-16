@@ -9,7 +9,6 @@ import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
 	"skp-go/skynet_go/mq/conn"
-	"skp-go/skynet_go/mq/server"
 	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpc/rpcE"
 	"skp-go/skynet_go/rpc/rpcU"
@@ -71,7 +70,11 @@ func NewClient(instance string, address string) *Client {
 	return c
 }
 
-func NewLocalClient(instance string, server *server.Server) *Client {
+type ServerI interface {
+	OnRegisterLocal(tcpConn conn.ConnI)
+}
+
+func NewLocalClient(instance string, server ServerI) *Client {
 	c := &Client{}
 	rpcU.NewServer(c)
 	c.pendingSeq = 0
@@ -89,7 +92,7 @@ func NewLocalClient(instance string, server *server.Server) *Client {
 	}
 	c.Client = mq.NewClient(tcpConn)
 
-	server.OnMqRegister(c.dialConnI.GetS())
+	server.OnRegisterLocal(c.dialConnI.GetS())
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
@@ -184,7 +187,7 @@ func (c *Client) Register() error {
 	reply := mq.RegisterReply{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnRegister", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq.OnClientRegister", &request, &reply); err != nil {
 		return errorCode.NewErrCode(0, err.Error())
 	}
 	c.harbor = reply.Harbor
@@ -198,7 +201,7 @@ func (c *Client) StopSubscribe() {
 	reply := mq.NilStruct{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnStopSubscribe", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq.OnClientStopSubscribe", &request, &reply); err != nil {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
@@ -214,7 +217,7 @@ func (c *Client) Close() {
 	reply := mq.NilStruct{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnClose", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq.OnClientClose", &request, &reply); err != nil {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 

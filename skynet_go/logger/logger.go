@@ -62,7 +62,7 @@ const (
 	LmodelFlags = Lscreen
 )
 
-var isPanic = true
+var isPanic = false
 
 func SetPanic(b bool) {
 	isPanic = b

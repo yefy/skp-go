@@ -13,6 +13,13 @@ const (
 	TimeOut
 )
 
+var Line string = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+var isStack bool = false
+
+func SetStack(b bool) {
+	isStack = b
+}
+
 type ErrCode struct {
 	server string
 	code   int
@@ -28,7 +35,7 @@ func (e *ErrCode) Code() int {
 func (e *ErrCode) Error() string {
 	err := fmt.Sprintf("server:(%s) errCode:(%d) where:(%s) msg:(%s)", e.server, e.code, e.where, e.msg)
 	if len(e.stack) > 0 {
-		err = fmt.Sprintf("%s\n*****goroutine stack start*****\n%s*****goroutinestack stack end*****", err, e.stack)
+		err = fmt.Sprintf("%s\n*****goroutine stack start*****\n%s*****goroutinestack stack end*****%s", err, e.stack, Line)
 	}
 	return err
 }
@@ -39,7 +46,10 @@ func getErrCode(server string, code int, format string, a ...interface{}) error 
 	now := time.Now()
 	levelName := ""
 	where := logger.FormatHeader(now, funcName, file, line, levelName)
-	stack := string(debug.Stack())
+	var stack string
+	if isStack {
+		stack = string(debug.Stack())
+	}
 	errCode := &ErrCode{server, code, fmt.Sprintf(format, a...), where, stack}
 	return errCode
 }

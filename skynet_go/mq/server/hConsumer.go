@@ -46,13 +46,22 @@ func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
 			log.Fatal("not harbor = %d", harbor)
 		}
 	} else {
-		key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
-		q := c.client.server.topicTag[key]
-		if q == nil {
-			log.Fatal("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
-			q = NewSQProducer(c.client.server, mqMsg.GetTopic(), mqMsg.GetTag())
-			c.client.server.topicTag[key] = q
+		if mqMsg.GetTopic() == "Mq" {
+			c.client.server.OnRegisterMqMsg(c.client, mqMsg)
+		} else {
+			if c.client.harbor == 0 {
+				c.client.server.ClientError(c.client)
+				return
+			}
+
+			key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
+			q := c.client.server.topicTag[key]
+			if q == nil {
+				log.Fatal("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
+				q = NewSQProducer(c.client.server, mqMsg.GetTopic(), mqMsg.GetTag())
+				c.client.server.topicTag[key] = q
+			}
+			q.SendWriteMqMsg(mqMsg)
 		}
-		q.SendWriteMqMsg(mqMsg)
 	}
 }
