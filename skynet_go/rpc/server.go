@@ -7,12 +7,6 @@ import (
 	"sync/atomic"
 )
 
-var isTest bool = true
-
-func SetTest(b bool) {
-	isTest = b
-}
-
 const (
 	TypCall int32 = iota
 	TypCallReq
