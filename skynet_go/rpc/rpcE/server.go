@@ -10,12 +10,6 @@ import (
 	"sync/atomic"
 )
 
-var isTest bool = true
-
-func SetTest(b bool) {
-	isTest = b
-}
-
 type ObjMethod struct {
 	name      string
 	method    reflect.Method
@@ -101,7 +95,7 @@ func NewService(obj ServerI) (*Service, error) {
 type ServerI interface {
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
-	RPC_Close()
+	RPC_Stop()
 }
 
 type ServerB struct {
@@ -116,7 +110,7 @@ func (sb *ServerB) RPC_GetServer() *Server {
 	return sb.server
 }
 
-func (sb *ServerB) RPC_Close() {
+func (sb *ServerB) RPC_Stop() {
 
 }
 
@@ -151,7 +145,40 @@ func (server *Server) RPC_Start() {
 }
 
 func (server *Server) RPC_Stop() {
-	server.service.obj.RPC_Close()
+	server.service.obj.RPC_Stop()
+}
+
+func (server *Server) getFuncValue(objMethod *ObjMethod, msg *rpc.Msg) (reflect.Value, reflect.Value, error) {
+	var args reflect.Value
+	// Decode the argument value.
+	argIsValue := false // if true, need to indirect before calling.
+	if objMethod.argType.Kind() == reflect.Ptr {
+		args = reflect.New(objMethod.argType.Elem())
+	} else {
+		args = reflect.New(objMethod.argType)
+		argIsValue = true
+	}
+
+	err := encodes.DecodeBody(msg.Encode, msg.Args.(string), args.Interface())
+	if err != nil {
+		return reflect.Value{}, reflect.Value{}, err
+	}
+
+	//buf := bytes.NewBufferString()
+	// argv guaranteed to be a pointer now.
+	if argIsValue {
+		args = args.Elem()
+	}
+
+	reply := reflect.New(objMethod.replyType.Elem())
+
+	switch objMethod.replyType.Elem().Kind() {
+	case reflect.Map:
+		reply.Elem().Set(reflect.MakeMap(objMethod.replyType.Elem()))
+	case reflect.Slice:
+		reply.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
+	}
+	return args, reply, nil
 }
 
 func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
@@ -166,31 +193,10 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 				}
 			}()
 
-			var args reflect.Value
-			// Decode the argument value.
-			argIsValue := false // if true, need to indirect before calling.
-			if objMethod.argType.Kind() == reflect.Ptr {
-				args = reflect.New(objMethod.argType.Elem())
-			} else {
-				args = reflect.New(objMethod.argType)
-				argIsValue = true
-			}
-
-			encodes.DecodeBody(msg.Encode, msg.Args.(string), args.Interface())
-
-			//buf := bytes.NewBufferString()
-			// argv guaranteed to be a pointer now.
-			if argIsValue {
-				args = args.Elem()
-			}
-
-			replyv := reflect.New(objMethod.replyType.Elem())
-
-			switch objMethod.replyType.Elem().Kind() {
-			case reflect.Map:
-				replyv.Elem().Set(reflect.MakeMap(objMethod.replyType.Elem()))
-			case reflect.Slice:
-				replyv.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
+			args, replyv, err := server.getFuncValue(objMethod, msg)
+			if err != nil {
+				log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
+				return
 			}
 
 			// valuePool := server.valuePools[2]
@@ -212,52 +218,33 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 				}
 			}()
 
-			var args reflect.Value
-			// Decode the argument value.
-			argIsValue := false // if true, need to indirect before calling.
-			if objMethod.argType.Kind() == reflect.Ptr {
-				args = reflect.New(objMethod.argType.Elem())
-			} else {
-				args = reflect.New(objMethod.argType)
-				argIsValue = true
-			}
+			args, replyv, err := server.getFuncValue(objMethod, msg)
+			if err == nil {
+				// valuePool := server.valuePools[2]
+				// argsValue := valuePool.Get().([]reflect.Value)
+				// argsValue[0] = server.service.objValue
+				// argsValue[1] = args
+				// argsValue[2] = replyv
+				// retValues := objMethod.method.Func.Call(argsValue)
 
-			encodes.DecodeBody(msg.Encode, msg.Args.(string), args.Interface())
-
-			//buf := bytes.NewBufferString()
-			// argv guaranteed to be a pointer now.
-			if argIsValue {
-				args = args.Elem()
-			}
-
-			replyv := reflect.New(objMethod.replyType.Elem())
-
-			switch objMethod.replyType.Elem().Kind() {
-			case reflect.Map:
-				replyv.Elem().Set(reflect.MakeMap(objMethod.replyType.Elem()))
-			case reflect.Slice:
-				replyv.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
-			}
-
-			// valuePool := server.valuePools[2]
-			// argsValue := valuePool.Get().([]reflect.Value)
-			// argsValue[0] = server.service.objValue
-			// argsValue[1] = args
-			// argsValue[2] = replyv
-			// retValues := objMethod.method.Func.Call(argsValue)
-
-			retValues := objMethod.method.Func.Call([]reflect.Value{server.service.objValue, args, replyv})
-			errI := retValues[0].Interface()
-			if errI != nil {
-				msg.Err = errI
-				msg.CB2("", msg.Err.(error))
-			} else {
-				msg.Reply, msg.Err = encodes.EncodeBody(msg.Encode, replyv.Interface())
-				if msg.Err != nil {
+				retValues := objMethod.method.Func.Call([]reflect.Value{server.service.objValue, args, replyv})
+				errI := retValues[0].Interface()
+				if errI != nil {
+					msg.Err = errI
+					log.ErrorCode(errorCode.NewErrCode(0, msg.Err.(error).Error()))
 					msg.CB2("", msg.Err.(error))
 				} else {
-					msg.CB2(msg.Reply.(string), nil)
+					msg.Reply, msg.Err = encodes.EncodeBody(msg.Encode, replyv.Interface())
+					if msg.Err != nil {
+						log.ErrorCode(errorCode.NewErrCode(0, msg.Err.(error).Error()))
+						msg.CB2("", msg.Err.(error))
+					} else {
+						msg.CB2(msg.Reply.(string), nil)
+					}
 				}
+			} else {
+				log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
+				msg.CB2("", err)
 			}
 		}()
 
@@ -270,46 +257,25 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 				}
 			}()
 
-			var args reflect.Value
-			// Decode the argument value.
-			argIsValue := false // if true, need to indirect before calling.
-			if objMethod.argType.Kind() == reflect.Ptr {
-				args = reflect.New(objMethod.argType.Elem())
+			args, replyv, err := server.getFuncValue(objMethod, msg)
+			if err == nil {
+				// valuePool := server.valuePools[2]
+				// argsValue := valuePool.Get().([]reflect.Value)
+				// argsValue[0] = server.service.objValue
+				// argsValue[1] = args
+				// argsValue[2] = replyv
+				// retValues := objMethod.method.Func.Call(argsValue)
+
+				retValues := objMethod.method.Func.Call([]reflect.Value{server.service.objValue, args, replyv})
+				errI := retValues[0].Interface()
+				if errI != nil {
+					msg.Err = errI.(error)
+				} else {
+					msg.Reply, msg.Err = encodes.EncodeBody(msg.Encode, replyv.Interface())
+				}
 			} else {
-				args = reflect.New(objMethod.argType)
-				argIsValue = true
-			}
-
-			encodes.DecodeBody(msg.Encode, msg.Args.(string), args.Interface())
-
-			//buf := bytes.NewBufferString()
-			// argv guaranteed to be a pointer now.
-			if argIsValue {
-				args = args.Elem()
-			}
-
-			replyv := reflect.New(objMethod.replyType.Elem())
-
-			switch objMethod.replyType.Elem().Kind() {
-			case reflect.Map:
-				replyv.Elem().Set(reflect.MakeMap(objMethod.replyType.Elem()))
-			case reflect.Slice:
-				replyv.Elem().Set(reflect.MakeSlice(objMethod.replyType.Elem(), 0, 0))
-			}
-
-			// valuePool := server.valuePools[2]
-			// argsValue := valuePool.Get().([]reflect.Value)
-			// argsValue[0] = server.service.objValue
-			// argsValue[1] = args
-			// argsValue[2] = replyv
-			// retValues := objMethod.method.Func.Call(argsValue)
-
-			retValues := objMethod.method.Func.Call([]reflect.Value{server.service.objValue, args, replyv})
-			errI := retValues[0].Interface()
-			if errI != nil {
-				msg.Err = errI.(error)
-			} else {
-				msg.Reply, msg.Err = encodes.EncodeBody(msg.Encode, replyv.Interface())
+				log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
+				msg.Err = err
 			}
 
 		}()

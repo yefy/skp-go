@@ -6,11 +6,11 @@ import (
 	"sync"
 )
 
-func NewClient(tcpConn conn.ConnI) *Client {
+func NewClient(connI conn.ConnI) *Client {
 	c := &Client{}
 	rpcU.NewServer(c)
-	if tcpConn != nil {
-		c.SetTcp(tcpConn)
+	if connI != nil {
+		c.SetConn(connI)
 	}
 
 	return c
@@ -18,24 +18,24 @@ func NewClient(tcpConn conn.ConnI) *Client {
 
 type Client struct {
 	rpcU.ServerB
-	mutex      sync.Mutex
-	tcpConn    conn.ConnI
-	tcpVersion int32
-	state      int32
+	mutex       sync.Mutex
+	connI       conn.ConnI
+	connVersion int32
+	state       int32
 }
 
-func (c *Client) Error(tcpVersion int32) {
+func (c *Client) Error(connVersion int32) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
-	if tcpVersion != c.tcpVersion {
+	if connVersion != c.connVersion {
 		return
 	}
-	if c.tcpConn != nil {
-		c.tcpConn.Close()
-		c.tcpConn = nil
+	if c.connI != nil {
+		c.connI.Close()
+		c.connI = nil
 	}
-	c.tcpVersion++
+	c.connVersion++
 	c.state = ClientStateErr
 }
 
@@ -47,19 +47,19 @@ func (c *Client) GetState() int32 {
 	return c.state
 }
 
-func (c *Client) GetTcp() (conn.ConnI, int32) {
+func (c *Client) GetConn() (conn.ConnI, int32) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
-	return c.tcpConn, c.tcpVersion
+	return c.connI, c.connVersion
 }
 
-func (c *Client) SetTcp(tcpConn conn.ConnI) {
+func (c *Client) SetConn(connI conn.ConnI) {
 	c.Close()
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
-	c.tcpConn = tcpConn
-	c.tcpVersion++
+	c.connI = connI
+	c.connVersion++
 	c.state = ClientStateStart
 }
 
@@ -67,8 +67,8 @@ func (c *Client) ClearTcp() {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
-	c.tcpConn = nil
-	c.tcpVersion++
+	c.connI = nil
+	c.connVersion++
 	c.state = ClientStateInit
 }
 
@@ -76,8 +76,8 @@ func (c *Client) Close() {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
-	if c.tcpConn != nil {
-		c.tcpConn.Close()
-		c.tcpConn = nil
+	if c.connI != nil {
+		c.connI.Close()
+		c.connI = nil
 	}
 }

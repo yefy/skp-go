@@ -8,10 +8,10 @@ import (
 	"sync/atomic"
 )
 
-var isTest bool = true
+var isCheck bool = true
 
-func SetTest(b bool) {
-	isTest = b
+func SetCheck(b bool) {
+	isCheck = b
 }
 
 type ObjMethod struct {
@@ -68,7 +68,7 @@ func NewService(obj ServerI) (*Service, error) {
 type ServerI interface {
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
-	RPC_Close()
+	RPC_Stop()
 }
 
 type ServerB struct {
@@ -83,7 +83,7 @@ func (sb *ServerB) RPC_GetServer() *Server {
 	return sb.server
 }
 
-func (sb *ServerB) RPC_Close() {
+func (sb *ServerB) RPC_Stop() {
 
 }
 
@@ -112,7 +112,7 @@ func (server *Server) RPC_Start() {
 	server.service.obj.RPC_SetServer(server)
 }
 func (server *Server) RPC_Stop() {
-	server.service.obj.RPC_Close()
+	server.service.obj.RPC_Stop()
 }
 
 func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
@@ -204,7 +204,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 }
 
 func checkArgv(isFunc bool, args ...interface{}) error {
-	if isTest == false {
+	if isCheck == false {
 		return nil
 	}
 

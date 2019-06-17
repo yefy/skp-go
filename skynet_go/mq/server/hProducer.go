@@ -20,9 +20,13 @@ type SHProducer struct {
 	client *Client
 }
 
-func (p *SHProducer) GetTcp() (conn.ConnI, int32, bool) {
+func (p *SHProducer) GetDescribe() string {
+	return ""
+}
+
+func (p *SHProducer) GetConn() (conn.ConnI, int32, bool) {
 	if (p.client.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := p.client.GetTcp()
+		tcpConn, tcpVersion := p.client.GetConn()
 		return tcpConn, tcpVersion, true
 	}
 

@@ -13,7 +13,8 @@ import (
 
 type ConsumerI interface {
 	DoMqMsg(*MqMsg)
-	GetTcp() (conn.ConnI, int32, bool)
+	GetConn() (conn.ConnI, int32, bool)
+	GetDescribe() string
 	Error(int32)
 }
 
@@ -26,10 +27,10 @@ func NewConsumer(cI ConsumerI) *Consumer {
 
 type Consumer struct {
 	rpcU.ServerB
-	cI         ConsumerI
-	vector     *Vector
-	tcpConn    conn.ConnI
-	tcpVersion int32
+	cI          ConsumerI
+	vector      *Vector
+	connI       conn.ConnI
+	connVersion int32
 }
 
 func (c *Consumer) Start() {
@@ -43,23 +44,32 @@ func (c *Consumer) Stop() {
 	c.RPC_GetServer().Stop(true)
 }
 
-func (c *Consumer) GetTcp() bool {
-	tcpConn, tcpVersion, ok := c.cI.GetTcp()
+func (c *Consumer) GetConn() bool {
+	connI, connVersion, ok := c.cI.GetConn()
 	if !ok {
 		return ok
 	}
-	c.tcpConn = tcpConn
-	log.Fatal("tcpConn = %+v, tcpVersion = %+v, c.tcpVersion = %+v", tcpConn, tcpVersion, c.tcpVersion)
-	if c.tcpVersion != tcpVersion {
-		c.tcpVersion = tcpVersion
+
+	log.Fatal("connI = %+v, connVersion = %+v, c.connVersion = %+v", connI, connVersion, c.connVersion)
+	if c.connVersion != connVersion {
+		c.connI = connI
+		c.connVersion = connVersion
 		c.vector = NewVector()
+		c.vector.SetConn(c.connI)
+	} else {
+		if c.connI == nil {
+			c.connI = connI
+		}
 	}
-	c.vector.SetConn(c.tcpConn)
 	return ok
 }
 
+func (c *Consumer) GetDescribe() string {
+	return c.cI.GetDescribe()
+}
+
 func (c *Consumer) Error() {
-	c.cI.Error(c.tcpVersion)
+	c.cI.Error(c.connVersion)
 }
 
 func (c *Consumer) OnReadMqMsg() {
@@ -69,7 +79,7 @@ func (c *Consumer) OnReadMqMsg() {
 			return
 		}
 
-		if !c.GetTcp() {
+		if !c.GetConn() {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
@@ -78,7 +88,7 @@ func (c *Consumer) OnReadMqMsg() {
 		if err != nil {
 			errCode := err.(*errorCode.ErrCode)
 			if errCode.Code() != errorCode.TimeOut {
-				c.tcpConn = nil
+				c.connI = nil
 				c.Error()
 				time.Sleep(100 * time.Millisecond)
 				continue

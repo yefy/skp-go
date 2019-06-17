@@ -21,9 +21,13 @@ type SHConsumer struct {
 	*mq.Consumer
 }
 
-func (c *SHConsumer) GetTcp() (conn.ConnI, int32, bool) {
+func (c *SHConsumer) GetDescribe() string {
+	return ""
+}
+
+func (c *SHConsumer) GetConn() (conn.ConnI, int32, bool) {
 	if (c.client.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := c.client.GetTcp()
+		tcpConn, tcpVersion := c.client.GetConn()
 		return tcpConn, tcpVersion, true
 	}
 

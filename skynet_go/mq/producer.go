@@ -12,7 +12,8 @@ import (
 )
 
 type ProducerI interface {
-	GetTcp() (conn.ConnI, int32, bool)
+	GetConn() (conn.ConnI, int32, bool)
+	GetDescribe() string
 	Error(int32)
 }
 
@@ -20,14 +21,16 @@ func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
 	p.pI = pI
 	rpcU.NewServer(p)
+	p.millisecond = 0
 	return p
 }
 
 type Producer struct {
 	rpcU.ServerB
-	pI         ProducerI
-	tcpConn    conn.ConnI
-	tcpVersion int32
+	pI          ProducerI
+	connI       conn.ConnI
+	connVersion int32
+	millisecond int32
 }
 
 func (p *Producer) Start() {
@@ -39,21 +42,31 @@ func (p *Producer) Stop() {
 	p.RPC_GetServer().Stop(false)
 }
 
-func (p *Producer) GetTcp() bool {
-	tcpConn, tcpVersion, ok := p.pI.GetTcp()
+func (p *Producer) GetConn() bool {
+	connI, connVersion, ok := p.pI.GetConn()
 	if !ok {
 		return ok
 	}
-	p.tcpConn = tcpConn
-	if p.tcpVersion != tcpVersion {
-		p.tcpVersion = tcpVersion
+
+	if p.connVersion != connVersion {
+		p.connVersion = connVersion
+		p.connI = connI
+		//___yefy
 		//重新发送
+	} else {
+		if p.connI == nil {
+			p.connI = connI
+		}
 	}
 	return ok
 }
 
+func (p *Producer) GetDescribe() string {
+	return p.pI.GetDescribe()
+}
+
 func (p *Producer) Error() {
-	p.pI.Error(p.tcpVersion)
+	p.pI.Error(p.connVersion)
 }
 
 func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
@@ -67,14 +80,20 @@ func (p *Producer) OnWriteMqMsg(mqMsg *MqMsg) error {
 	if err != nil {
 		return log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
+
 	for {
 		if p.RPC_GetServer().IsStop() {
 			log.Fatal("rpcRead stop")
 			return nil
 		}
 
-		if !p.GetTcp() {
+		if !p.GetConn() {
 			time.Sleep(100 * time.Millisecond)
+			p.millisecond += 100
+			if p.millisecond > 1000*5 {
+				p.millisecond = 0
+				log.Err(p.pI.GetDescribe() + "  getconn timeout")
+			}
 			continue
 		}
 
@@ -83,25 +102,6 @@ func (p *Producer) OnWriteMqMsg(mqMsg *MqMsg) error {
 			continue
 		}
 		break
-	}
-
-	return nil
-}
-
-func (p *Producer) WriteMqMsg(mqMsg *MqMsg) error {
-	log.Fatal("mqMsg = %+v", proto.MarshalTextString(mqMsg))
-
-	mqMsgBytes, err := proto.Marshal(mqMsg)
-	if err != nil {
-		return log.Panic(errorCode.NewErrCode(0, err.Error()))
-	}
-
-	if !p.GetTcp() {
-		return log.Panic(errorCode.NewErrCode(0, "not GetTcpConn"))
-	}
-
-	if err := p.Write(mqMsgBytes); err != nil {
-		return err
 	}
 
 	return nil
@@ -138,7 +138,7 @@ func (p *Producer) WriteSize(size int) error {
 func (p *Producer) WriteBytes(bytes []byte) error {
 	size := len(bytes)
 	for size > 0 {
-		wSize, err := p.tcpConn.Write(bytes)
+		wSize, err := p.connI.Write(bytes)
 		if err != nil {
 			log.Fatal(err.Error())
 			return err

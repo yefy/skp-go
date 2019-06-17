@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"net/rpc"
+	"testing"
+	"time"
 )
 
 //go对RPC的支持，支持三个级别：TCP、HTTP、JSONRPC
@@ -32,7 +34,8 @@ func (r *Rect) Perimeter(p Params, ret *int) error {
 	return nil
 }
 
-func main_server() {
+func Test_RPC(t *testing.T) {
+	go rpcClient()
 	rect := new(Rect)
 	//注册一个rect服务
 	rpc.Register(rect)
@@ -40,11 +43,12 @@ func main_server() {
 	rpc.HandleHTTP()
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
-		log.Fatal(err)
+		t.Error()
 	}
 }
 
-func main_client() {
+func rpcClient() {
+	time.Sleep(time.Second * 1)
 	//连接远程rpc服务
 	rpc, err := rpc.DialHTTP("tcp", "127.0.0.1:8080")
 	if err != nil {

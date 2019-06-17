@@ -145,12 +145,12 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 		reply.Harbor = replyClient.harbor
 		sMqMsg, err := mq.ReplyMqMsg(replyClient.harbor, rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), &reply)
 		if err == nil {
-			replyClient.shProducer.WriteMqMsg(sMqMsg)
+			replyClient.shProducer.SendWriteMqMsg(sMqMsg)
 		}
 	}
 
 	if request.Harbor > 0 {
-		tcpConn, _ := newClient.GetTcp()
+		tcpConn, _ := newClient.GetConn()
 		connI, connOk := s.instanceClient.Load(request.Instance)
 		if connOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
@@ -166,7 +166,7 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 			replyFunc(newClient)
 			newClient.Client.ClearTcp()
 			newClient.Close()
-			conn.SetTcp(tcpConn)
+			conn.SetConn(tcpConn)
 		}
 	} else {
 		newClient.instance = request.Instance

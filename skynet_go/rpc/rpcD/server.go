@@ -11,7 +11,7 @@ type ServerI interface {
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Dispath(method string, args []interface{}) error
-	RPC_Close()
+	RPC_Stop()
 }
 
 type ServerB struct {
@@ -26,7 +26,7 @@ func (sb *ServerB) RPC_GetServer() *Server {
 	return sb.server
 }
 
-func (sb *ServerB) RPC_Close() {
+func (sb *ServerB) RPC_Stop() {
 
 }
 
@@ -51,7 +51,7 @@ func (server *Server) RPC_Start() {
 	server.service.RPC_SetServer(server)
 }
 func (server *Server) RPC_Stop() {
-	server.service.RPC_Close()
+	server.service.RPC_Stop()
 }
 
 func (server *Server) RPC_DoMsg(msg *rpc.Msg) {

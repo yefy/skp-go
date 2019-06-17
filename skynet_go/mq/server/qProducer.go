@@ -39,7 +39,11 @@ func (q *SQProducer) GetClient() bool {
 	return false
 }
 
-func (q *SQProducer) GetTcp() (conn.ConnI, int32, bool) {
+func (q *SQProducer) GetDescribe() string {
+	return ""
+}
+
+func (q *SQProducer) GetConn() (conn.ConnI, int32, bool) {
 	if q.client == nil {
 		if !q.GetClient() {
 			return nil, 0, false
@@ -52,7 +56,7 @@ func (q *SQProducer) GetTcp() (conn.ConnI, int32, bool) {
 	}
 
 	if (q.client.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := q.client.GetTcp()
+		tcpConn, tcpVersion := q.client.GetConn()
 		return tcpConn, tcpVersion, true
 	}
 

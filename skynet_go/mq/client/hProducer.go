@@ -20,9 +20,13 @@ type CHProducer struct {
 	cient *Client
 }
 
-func (p *CHProducer) GetTcp() (conn.ConnI, int32, bool) {
+func (p *CHProducer) GetDescribe() string {
+	return ""
+}
+
+func (p *CHProducer) GetConn() (conn.ConnI, int32, bool) {
 	if (p.cient.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := p.cient.GetTcp()
+		tcpConn, tcpVersion := p.cient.GetConn()
 		return tcpConn, tcpVersion, true
 	}
 
