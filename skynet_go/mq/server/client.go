@@ -3,18 +3,17 @@ package server
 import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
 )
 
-func NewClient(server *Server, tcpConn conn.ConnI) *Client {
+func NewClient(server *Server, connI mq.ConnI) *Client {
 	c := &Client{}
 	c.server = server
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
-	c.Client = mq.NewClient(tcpConn)
+	c.Client = mq.NewClient(connI)
 	rpcU.NewServer(c)
 
 	return c

@@ -3,7 +3,6 @@ package client
 import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
@@ -26,17 +25,17 @@ func (c *CHConsumer) GetDescribe() string {
 	return ""
 }
 
-func (c *CHConsumer) GetConn() (conn.ConnI, int32, bool) {
+func (c *CHConsumer) GetConn() (mq.ConnI, int32, bool) {
 	if (c.cient.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := c.cient.GetConn()
-		return tcpConn, tcpVersion, true
+		connI, connVersion := c.cient.GetConn()
+		return connI, connVersion, true
 	}
 
 	return nil, 0, false
 }
 
-func (c *CHConsumer) Error(tcpVersion int32) {
-	c.cient.Error(tcpVersion)
+func (c *CHConsumer) Error(connVersion int32) {
+	c.cient.Error(connVersion)
 }
 
 func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {

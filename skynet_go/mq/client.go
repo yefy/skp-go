@@ -1,12 +1,11 @@
 package mq
 
 import (
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 )
 
-func NewClient(connI conn.ConnI) *Client {
+func NewClient(connI ConnI) *Client {
 	c := &Client{}
 	rpcU.NewServer(c)
 	if connI != nil {
@@ -19,7 +18,7 @@ func NewClient(connI conn.ConnI) *Client {
 type Client struct {
 	rpcU.ServerB
 	mutex       sync.Mutex
-	connI       conn.ConnI
+	connI       ConnI
 	connVersion int32
 	state       int32
 }
@@ -47,13 +46,13 @@ func (c *Client) GetState() int32 {
 	return c.state
 }
 
-func (c *Client) GetConn() (conn.ConnI, int32) {
+func (c *Client) GetConn() (ConnI, int32) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 	return c.connI, c.connVersion
 }
 
-func (c *Client) SetConn(connI conn.ConnI) {
+func (c *Client) SetConn(connI ConnI) {
 	c.Close()
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
@@ -63,7 +62,7 @@ func (c *Client) SetConn(connI conn.ConnI) {
 	c.state = ClientStateStart
 }
 
-func (c *Client) ClearTcp() {
+func (c *Client) ClearConn() {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 

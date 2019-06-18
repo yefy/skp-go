@@ -2,7 +2,6 @@ package client
 
 import (
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
@@ -24,15 +23,15 @@ func (p *CHProducer) GetDescribe() string {
 	return ""
 }
 
-func (p *CHProducer) GetConn() (conn.ConnI, int32, bool) {
+func (p *CHProducer) GetConn() (mq.ConnI, int32, bool) {
 	if (p.cient.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := p.cient.GetConn()
-		return tcpConn, tcpVersion, true
+		connI, connVersion := p.cient.GetConn()
+		return connI, connVersion, true
 	}
 
 	return nil, 0, false
 }
 
-func (p *CHProducer) Error(tcpVersion int32) {
-	p.cient.Error(tcpVersion)
+func (p *CHProducer) Error(connVersion int32) {
+	p.cient.Error(connVersion)
 }

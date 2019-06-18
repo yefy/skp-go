@@ -2,7 +2,6 @@ package server
 
 import (
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/mq/conn"
 )
 
 func NewSQProducer(server *Server, topic string, tag string) *SQProducer {
@@ -43,7 +42,7 @@ func (q *SQProducer) GetDescribe() string {
 	return ""
 }
 
-func (q *SQProducer) GetConn() (conn.ConnI, int32, bool) {
+func (q *SQProducer) GetConn() (mq.ConnI, int32, bool) {
 	if q.client == nil {
 		if !q.GetClient() {
 			return nil, 0, false
@@ -56,14 +55,14 @@ func (q *SQProducer) GetConn() (conn.ConnI, int32, bool) {
 	}
 
 	if (q.client.GetState() & mq.ClientStateStart) > 0 {
-		tcpConn, tcpVersion := q.client.GetConn()
-		return tcpConn, tcpVersion, true
+		connI, connVersion := q.client.GetConn()
+		return connI, connVersion, true
 	}
 
 	return nil, 0, false
 }
 
-func (q *SQProducer) Error(tcpVersion int32) {
-	q.client.Error(tcpVersion)
+func (q *SQProducer) Error(connVersion int32) {
+	q.client.Error(connVersion)
 	q.client = nil
 }

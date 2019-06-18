@@ -4,7 +4,6 @@ import (
 	"net"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/mq/conn"
 	_ "strings"
 	"time"
 )
@@ -12,7 +11,7 @@ import (
 type Vector struct {
 	buffer     []byte
 	connBuffer []byte
-	tcpConn    conn.ConnI
+	connI      ConnI
 }
 
 func NewVector() *Vector {
@@ -22,16 +21,16 @@ func NewVector() *Vector {
 	return v
 }
 
-func (v *Vector) SetConn(tcpConn conn.ConnI) {
-	v.tcpConn = tcpConn
+func (v *Vector) SetConn(connI ConnI) {
+	v.connI = connI
 }
 
 func (v *Vector) Read(timeout time.Duration) error {
 	if timeout > 0 {
-		v.tcpConn.SetReadDeadline(time.Now().Add(timeout * time.Second))
+		v.connI.SetReadDeadline(time.Now().Add(timeout * time.Second))
 	}
 
-	size, err := v.tcpConn.Read(v.connBuffer)
+	size, err := v.connI.Read(v.connBuffer)
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			log.Fatal("timeout")

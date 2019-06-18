@@ -6,7 +6,6 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 	"sync/atomic"
@@ -106,12 +105,12 @@ func (s *Server) OnRegisterMqMsg(c *Client, mqMsg *mq.MqMsg) {
 	}
 }
 
-func (s *Server) OnRegisterLocal(tcpConn conn.ConnI) {
-	s.OnConn(tcpConn)
+func (s *Server) OnRegisterLocal(connI mq.ConnI) {
+	s.OnConn(connI)
 }
 
-func (s *Server) OnConn(tcpConn conn.ConnI) {
-	newClient := NewClient(s, tcpConn)
+func (s *Server) OnConn(connI mq.ConnI) {
+	newClient := NewClient(s, connI)
 	newClient.Start()
 }
 
@@ -150,31 +149,31 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 	}
 
 	if request.Harbor > 0 {
-		tcpConn, _ := newClient.GetConn()
-		connI, connOk := s.instanceClient.Load(request.Instance)
-		if connOk == false {
+		connI, _ := newClient.GetConn()
+		clientI, clientOk := s.instanceClient.Load(request.Instance)
+		if clientOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
 			newClient.Close()
 			return
 		}
 
-		conn := connI.(*Client)
-		if conn.harbor != request.Harbor {
-			log.Err("conn.harbor != request.Harbor, conn.harbor = %+v, request.Harbor = %+v", conn.harbor, request.Harbor)
+		client := clientI.(*Client)
+		if client.harbor != request.Harbor {
+			log.Err("client.harbor != request.Harbor, client.harbor = %+v, request.Harbor = %+v", client.harbor, request.Harbor)
 			newClient.Close()
 		} else {
 			replyFunc(newClient)
-			newClient.Client.ClearTcp()
+			newClient.Client.ClearConn()
 			newClient.Close()
-			conn.SetConn(tcpConn)
+			client.SetConn(connI)
 		}
 	} else {
 		newClient.instance = request.Instance
 		newClient.harbor = atomic.AddInt32(&s.harbor, 1)
 		newClient.Subscribe(request.Topic, request.Tag)
 
-		_, connOk := s.instanceClient.LoadOrStore(request.Instance, newClient)
-		if connOk {
+		_, clientOk := s.instanceClient.LoadOrStore(request.Instance, newClient)
+		if clientOk {
 			log.Err("exist request.Instance = %+v", request.Instance)
 			newClient.Close()
 			return

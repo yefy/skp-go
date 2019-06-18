@@ -3,7 +3,6 @@ package mq
 import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/utility"
 	"time"
 
@@ -16,9 +15,16 @@ func NewMqConn() *MqConn {
 }
 
 type MqConn struct {
-	vector      *Vector
-	connI       conn.ConnI
-	connVersion int32
+	vector *Vector
+	connI  ConnI
+}
+
+func (mc *MqConn) SetConn(connI ConnI) {
+	if connI != nil {
+		mc.connI = connI
+		mc.vector = NewVector()
+		mc.vector.SetConn(mc.connI)
+	}
 }
 
 func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {

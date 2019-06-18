@@ -3,7 +3,6 @@ package mq
 import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/mq/conn"
 	"skp-go/skynet_go/rpc/rpcU"
 	"skp-go/skynet_go/utility"
 	"time"
@@ -13,7 +12,7 @@ import (
 
 type ConsumerI interface {
 	DoMqMsg(*MqMsg)
-	GetConn() (conn.ConnI, int32, bool)
+	GetConn() (ConnI, int32, bool)
 	GetDescribe() string
 	Error(int32)
 }
@@ -29,7 +28,7 @@ type Consumer struct {
 	rpcU.ServerB
 	cI          ConsumerI
 	vector      *Vector
-	connI       conn.ConnI
+	connI       ConnI
 	connVersion int32
 }
 
