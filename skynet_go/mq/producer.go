@@ -1,13 +1,10 @@
 package mq
 
 import (
-	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
+	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpc/rpcU"
-	"skp-go/skynet_go/utility"
 	"time"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type ProducerI interface {
@@ -20,17 +17,15 @@ func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
 	p.pI = pI
 	rpcU.NewServer(p)
-	p.millisecond = 0
+	//p.RPC_GetServer().Addoroutine(1)
+	//p.RPC_GetServer().Send("OnTimeOut")
 	return p
 }
 
 type Producer struct {
 	rpcU.ServerB
 	pI          ProducerI
-	connI       ConnI
-	connVersion int32
-	millisecond int32
-
+	mqConn      *MqConn
 	connVersion int32
 }
 
@@ -44,22 +39,26 @@ func (p *Producer) Stop() {
 }
 
 func (p *Producer) GetConn() bool {
+	if p.mqConn != nil {
+		return true
+	}
+
 	connI, connVersion, ok := p.pI.GetConn()
 	if !ok {
 		return ok
 	}
 
-	if p.connVersion != connVersion {
-		p.connVersion = connVersion
-		p.connI = connI
-		//___yefy
-		//重新发送
-	} else {
-		if p.connI == nil {
-			p.connI = connI
-		}
+	if p.connVersion == connVersion {
+		return false
 	}
-	return ok
+
+	p.connVersion = connVersion
+	p.mqConn = NewMqConn()
+	p.mqConn.SetConn(connI)
+	//___yefy
+	//重新发送 未响应的数据包
+
+	return true
 }
 
 func (p *Producer) GetDescribe() string {
@@ -67,7 +66,15 @@ func (p *Producer) GetDescribe() string {
 }
 
 func (p *Producer) Error() {
+	p.mqConn = nil
 	p.pI.Error(p.connVersion)
+}
+
+func (p *Producer) OnTimeOut() {
+	rpc.Timer(time.Second, func() bool {
+		log.Fatal("OnTimeOut")
+		return false
+	})
 }
 
 func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
@@ -75,81 +82,23 @@ func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
 }
 
 func (p *Producer) OnWriteMqMsg(mqMsg *MqMsg) error {
-	log.Fatal("mqMsg = %+v", proto.MarshalTextString(mqMsg))
-
-	mqMsgBytes, err := proto.Marshal(mqMsg)
-	if err != nil {
-		return log.Panic(errorCode.NewErrCode(0, err.Error()))
-	}
-
 	for {
 		if p.RPC_GetServer().IsStop() {
-			log.Fatal("rpcRead stop")
+			log.Fatal(p.GetDescribe() + " : Producer stop")
 			return nil
 		}
 
 		if !p.GetConn() {
 			time.Sleep(100 * time.Millisecond)
-			p.millisecond += 100
-			if p.millisecond > 1000*5 {
-				p.millisecond = 0
-				log.Err(p.pI.GetDescribe() + "  getconn timeout")
-			}
 			continue
 		}
 
-		if err := p.Write(mqMsgBytes); err != nil {
+		if err := p.mqConn.WriteMqMsg(mqMsg); err != nil {
 			p.Error()
 			continue
 		}
 		break
 	}
 
-	return nil
-}
-
-func (p *Producer) Write(bytes []byte) error {
-	if err := p.WriteSize(len(bytes)); err != nil {
-		return err
-	}
-
-	err := p.WriteBytes(bytes)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *Producer) WriteSize(size int) error {
-	var err error
-	bytes, err := utility.IntToBytes(size)
-	if err != nil {
-		return err
-	}
-
-	err = p.WriteBytes(bytes)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *Producer) WriteBytes(bytes []byte) error {
-	size := len(bytes)
-	for size > 0 {
-		wSize, err := p.connI.Write(bytes)
-		if err != nil {
-			log.Fatal(err.Error())
-			return err
-		}
-
-		if wSize == size {
-			break
-		}
-		bytes = bytes[wSize:]
-		size -= wSize
-	}
 	return nil
 }

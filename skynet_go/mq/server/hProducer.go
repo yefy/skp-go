@@ -2,21 +2,18 @@ package server
 
 import (
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewSHProducer(client *Client) *SHProducer {
 	p := &SHProducer{}
 	p.client = client
 	p.Producer = mq.NewProducer(p)
-	rpcU.NewServer(p)
 	return p
 }
 
 type SHProducer struct {
-	rpcU.ServerB
-	*mq.Producer
 	client *Client
+	*mq.Producer
 }
 
 func (p *SHProducer) GetDescribe() string {

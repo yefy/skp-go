@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -238,8 +239,8 @@ func (c *Client) WaitPending() bool {
 
 func (c *Client) Exit() {
 	//c.StopSubscribe()
-	w := rpc.NewWait()
-	w.Timer(c.WaitPending)
+
+	rpc.Timer(time.Second, c.WaitPending)
 	//c.Close()
 }
 

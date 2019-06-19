@@ -30,8 +30,17 @@ func (w *Wait) Wait() {
 	w.waitGroup.Wait()
 }
 
-func (w *Wait) Timer(callBack WaitCallBack2) {
-	t := time.Duration(100) * time.Millisecond
+func Run(callBack WaitCallBack) {
+	waitGroup := &sync.WaitGroup{}
+	waitGroup.Add(1)
+	go func() {
+		callBack()
+		waitGroup.Done()
+	}()
+	waitGroup.Wait()
+}
+
+func Timer(t time.Duration, callBack WaitCallBack2) {
 	timer := time.NewTimer(t)
 	isExit := false
 	for {

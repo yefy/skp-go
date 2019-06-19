@@ -9,6 +9,12 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+const (
+	SocketError int32 = iota
+	EnCodeError
+	DeCodeError
+)
+
 func NewMqConn() *MqConn {
 	mc := &MqConn{}
 	return mc
@@ -32,7 +38,7 @@ func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {
 
 	mqMsgBytes, err := proto.Marshal(mqMsg)
 	if err != nil {
-		return log.Panic(errorCode.NewErrCode(0, err.Error()))
+		return log.Panic(errorCode.NewErrCode(EnCodeError, err.Error()))
 	}
 
 	if err := mc.Write(mqMsgBytes); err != nil {
@@ -141,7 +147,7 @@ func (mc *MqConn) getMqMsg() (*MqMsg, error) {
 
 	msg := &MqMsg{}
 	if err := proto.Unmarshal(msgByte, msg); err != nil {
-		return nil, log.Panic(errorCode.NewErrCode(0, err.Error()))
+		return nil, log.Panic(errorCode.NewErrCode(DeCodeError, err.Error()))
 	}
 	mc.vector.Skip(size)
 	log.Fatal("msg = %+v", proto.MarshalTextString(msg))

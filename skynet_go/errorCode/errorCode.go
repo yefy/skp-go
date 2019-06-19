@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Unknown = iota
+	Unknown int32 = iota
 	TimeOut
 )
 
@@ -20,15 +20,24 @@ func SetStack(b bool) {
 	isStack = b
 }
 
+func GetCode(err error) int32 {
+	e, ok := err.(*ErrCode)
+	if !ok {
+		return -1
+	} else {
+		return e.Code()
+	}
+}
+
 type ErrCode struct {
 	server string
-	code   int
+	code   int32
 	msg    string
 	where  string
 	stack  string
 }
 
-func (e *ErrCode) Code() int {
+func (e *ErrCode) Code() int32 {
 	return e.code
 }
 
@@ -40,7 +49,7 @@ func (e *ErrCode) Error() string {
 	return err
 }
 
-func getErrCode(server string, code int, format string, a ...interface{}) error {
+func getErrCode(server string, code int32, format string, a ...interface{}) error {
 	pc, file, line, _ := runtime.Caller(2)
 	funcName := runtime.FuncForPC(pc).Name()
 	now := time.Now()
@@ -54,10 +63,10 @@ func getErrCode(server string, code int, format string, a ...interface{}) error 
 	return errCode
 }
 
-func NewErrCode(code int, format string, a ...interface{}) error {
+func NewErrCode(code int32, format string, a ...interface{}) error {
 	return getErrCode("", code, format, a...)
 }
 
-func NewErrCodeWhere(server string, code int, format string, a ...interface{}) error {
+func NewErrCodeWhere(server string, code int32, format string, a ...interface{}) error {
 	return getErrCode(server, code, format, a...)
 }
