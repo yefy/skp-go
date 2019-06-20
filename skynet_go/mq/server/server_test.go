@@ -27,6 +27,7 @@ func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
 func LocalClientTest(s *server.Server) {
 	time.Sleep(time.Second * 1)
 	log.SetLevel(log.Lerr)
+
 	mqClient := client.NewLocalClient("Test", s)
 	mqClient.Subscribe("Test", "*")
 	mqClient.RegisterServer(&Test{})
@@ -52,6 +53,7 @@ func Test_Server(t *testing.T) {
 	s := server.NewServer()
 	go LocalClientTest(s)
 	s.Listen(":5673")
+
 	wait := make(chan int)
 	<-wait
 }

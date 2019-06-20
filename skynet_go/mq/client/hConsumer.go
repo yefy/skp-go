@@ -39,6 +39,10 @@ func (c *CHConsumer) Error(connVersion int32) {
 }
 
 func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
+	if rMqMsg == nil {
+		return
+	}
+
 	if rMqMsg.GetTyp() == mq.TypeRespond {
 		pendingMsgI, ok := c.cient.pendingMap.Load(rMqMsg.GetPendingSeq())
 		if !ok {

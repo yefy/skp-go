@@ -2,7 +2,6 @@ package mq
 
 import (
 	log "skp-go/skynet_go/logger"
-	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpc/rpcU"
 	"time"
 )
@@ -17,8 +16,12 @@ func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
 	p.pI = pI
 	rpcU.NewServer(p)
-	//p.RPC_GetServer().Addoroutine(1)
-	//p.RPC_GetServer().Send("OnTimeOut")
+
+	// p.RPC_GetServer().Timer(time.Second, func() bool {
+	// 	p.OnTimeOut()
+	// 	return false
+	// })
+
 	return p
 }
 
@@ -70,12 +73,10 @@ func (p *Producer) Error() {
 	p.pI.Error(p.connVersion)
 }
 
-func (p *Producer) OnTimeOut() {
-	rpc.Timer(time.Second, func() bool {
-		log.Fatal("OnTimeOut")
-		return false
-	})
-}
+// func (p *Producer) OnTimeOut() {
+// 	log.Fatal("OnTimeOut")
+// 	p.SendWriteMqMsg(nil)
+// }
 
 func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
 	p.RPC_GetServer().Send("OnWriteMqMsg", mqMsg)
@@ -84,7 +85,7 @@ func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
 func (p *Producer) OnWriteMqMsg(mqMsg *MqMsg) error {
 	for {
 		if p.RPC_GetServer().IsStop() {
-			log.Fatal(p.GetDescribe() + " : Producer stop")
+			log.Fatal(p.GetDescribe() + " : Producer OnWriteMqMsg stop")
 			return nil
 		}
 

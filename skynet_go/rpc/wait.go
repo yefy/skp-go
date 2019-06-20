@@ -15,9 +15,6 @@ func NewWait() *Wait {
 	return w
 }
 
-type WaitCallBack func()
-type WaitCallBack2 func() bool
-
 func (w *Wait) Run(callBack WaitCallBack) {
 	w.waitGroup.Add(1)
 	go func() {
@@ -29,6 +26,9 @@ func (w *Wait) Run(callBack WaitCallBack) {
 func (w *Wait) Wait() {
 	w.waitGroup.Wait()
 }
+
+type WaitCallBack func()
+type WaitCallBack2 func() bool
 
 func Run(callBack WaitCallBack) {
 	waitGroup := &sync.WaitGroup{}

@@ -9,6 +9,7 @@ import (
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 func NewTopicClients() *TopicClients {
@@ -65,7 +66,17 @@ func (s *Server) Listen(address string) error {
 
 func (s *Server) Accept() {
 	for {
+		if s.RPC_GetServer().IsStop() {
+			log.Fatal("Accept stop")
+			return
+		}
+
+		s.listen.SetDeadline(time.Now().Add(3 * time.Second))
 		tcpConn, err := s.listen.AcceptTCP()
+		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+			continue
+		}
+
 		if err != nil {
 			log.Fatal(err.Error())
 			return

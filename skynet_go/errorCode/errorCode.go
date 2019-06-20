@@ -23,7 +23,7 @@ func SetStack(b bool) {
 func GetCode(err error) int32 {
 	e, ok := err.(*ErrCode)
 	if !ok {
-		return -1
+		return 0
 	} else {
 		return e.Code()
 	}

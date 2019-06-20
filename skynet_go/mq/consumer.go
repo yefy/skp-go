@@ -4,10 +4,7 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/rpc/rpcU"
-	"skp-go/skynet_go/utility"
 	"time"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type ConsumerI interface {
@@ -27,8 +24,7 @@ func NewConsumer(cI ConsumerI) *Consumer {
 type Consumer struct {
 	rpcU.ServerB
 	cI          ConsumerI
-	vector      *Vector
-	connI       ConnI
+	mqConn      *MqConn
 	connVersion int32
 }
 
@@ -44,23 +40,24 @@ func (c *Consumer) Stop() {
 }
 
 func (c *Consumer) GetConn() bool {
+	if c.mqConn != nil {
+		return true
+	}
+
 	connI, connVersion, ok := c.cI.GetConn()
 	if !ok {
 		return ok
 	}
 
-	log.Fatal("connI = %+v, connVersion = %+v, c.connVersion = %+v", connI, connVersion, c.connVersion)
-	if c.connVersion != connVersion {
-		c.connI = connI
-		c.connVersion = connVersion
-		c.vector = NewVector()
-		c.vector.SetConn(c.connI)
-	} else {
-		if c.connI == nil {
-			c.connI = connI
-		}
+	if c.connVersion == connVersion {
+		return false
 	}
-	return ok
+
+	c.connVersion = connVersion
+	c.mqConn = NewMqConn()
+	c.mqConn.SetConn(connI)
+
+	return true
 }
 
 func (c *Consumer) GetDescribe() string {
@@ -68,13 +65,14 @@ func (c *Consumer) GetDescribe() string {
 }
 
 func (c *Consumer) Error() {
+	c.mqConn = nil
 	c.cI.Error(c.connVersion)
 }
 
 func (c *Consumer) OnReadMqMsg() {
 	for {
 		if c.RPC_GetServer().IsStop() {
-			log.Fatal("rpcRead stop")
+			log.Fatal(c.GetDescribe() + " : Consumer OnReadMqMsg stop")
 			return
 		}
 
@@ -83,11 +81,12 @@ func (c *Consumer) OnReadMqMsg() {
 			continue
 		}
 
-		mqMsg, err := c.ReadMqMsg(3)
+		mqMsg, err := c.mqConn.ReadMqMsg(3)
 		if err != nil {
-			errCode := err.(*errorCode.ErrCode)
-			if errCode.Code() != errorCode.TimeOut {
-				c.connI = nil
+			errCode := errorCode.GetCode(err)
+			if errCode == errorCode.TimeOut {
+				c.cI.DoMqMsg(nil)
+			} else {
 				c.Error()
 				time.Sleep(100 * time.Millisecond)
 				continue
@@ -100,70 +99,4 @@ func (c *Consumer) OnReadMqMsg() {
 
 		c.cI.DoMqMsg(mqMsg)
 	}
-}
-
-func (c *Consumer) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
-	for {
-		if c.RPC_GetServer().IsStop() {
-			log.Fatal("rpcRead stop")
-			return nil, nil
-		}
-
-		rMqMsg, err := c.getMqMsg()
-		if err != nil {
-			return nil, err
-		}
-
-		if rMqMsg != nil {
-			return rMqMsg, nil
-		}
-
-		if err := c.vector.Read(timeout); err != nil {
-			return nil, err
-		}
-	}
-
-	return nil, nil
-}
-
-func (c *Consumer) getMqMsgSize() (int, error) {
-	sizeBytes := c.vector.Get(4)
-	if sizeBytes == nil {
-		return 0, nil
-	}
-
-	size, err := utility.BytesToInt(sizeBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	if !c.vector.CheckSize(int(4 + size)) {
-		return 0, nil
-	}
-
-	c.vector.Skip(4)
-	return int(size), nil
-}
-
-func (c *Consumer) getMqMsg() (*MqMsg, error) {
-	size, err := c.getMqMsgSize()
-	if err != nil {
-		return nil, err
-	}
-
-	if size == 0 {
-		return nil, nil
-	}
-	msgByte := c.vector.Get(size)
-	if msgByte == nil {
-		return nil, nil
-	}
-
-	msg := &MqMsg{}
-	if err := proto.Unmarshal(msgByte, msg); err != nil {
-		return nil, log.Panic(errorCode.NewErrCode(0, err.Error()))
-	}
-	c.vector.Skip(size)
-	log.Fatal("msg = %+v", proto.MarshalTextString(msg))
-	return msg, nil
 }

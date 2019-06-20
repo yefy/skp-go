@@ -90,12 +90,13 @@ func NewLocalClient(instance string, server ServerI) *Client {
 	if err != nil {
 		return nil
 	}
-	c.Client = mq.NewClient(connI)
 
+	c.Client = mq.NewClient(connI)
 	server.OnRegisterLocal(c.dialConnI.GetS())
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
+
 	c.rpcEMap = make(map[string]*rpcE.Server)
 	return c
 }

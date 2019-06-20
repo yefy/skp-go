@@ -19,6 +19,9 @@ type ServerB struct {
 }
 
 func (sb *ServerB) RPC_SetServer(server *Server) {
+	if sb.server != nil {
+		log.Err("sb.server != nil")
+	}
 	sb.server = server
 }
 

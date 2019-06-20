@@ -3,8 +3,10 @@ package rpc
 import (
 	"context"
 	"reflect"
+	log "skp-go/skynet_go/logger"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -174,13 +176,28 @@ func (server *Server) isStopping() bool {
 func (server *Server) run(index int32) {
 	defer server.waitGroup.Done()
 	done := server.ctx.Done()
+	//timer := time.NewTimer(time.Second)
+	//timer.Reset(time.Second)
+	//一次定时器  需要timer.Reset重新开始
+	//timer := time.NewTicker(time.Second)
+	//重复定时器
+
+	var timer *time.Ticker
+	var timerC <-chan time.Time = nil
 	for {
 		select {
+		case <-timerC:
+			if server.isStopping() {
+				return
+			}
+			log.Fatal("server.SendNumber = %d, server.recvNumber = %d", server.SendNumber, server.recvNumber)
 		case <-done:
 			done = nil
 			if server.isStopping() {
 				return
 			}
+			timer = time.NewTicker(time.Second)
+			timerC = timer.C
 		case cache := <-server.Cache:
 			msg := cache.(*Msg)
 			server.sI.RPC_DoMsg(msg)
@@ -190,4 +207,32 @@ func (server *Server) run(index int32) {
 			}
 		}
 	}
+}
+
+func (server *Server) RunOnce(callBack WaitCallBack) {
+	server.waitGroup.Add(1)
+	go func() {
+		defer server.waitGroup.Done()
+		callBack()
+	}()
+}
+
+func (server *Server) Timer(t time.Duration, callBack WaitCallBack2) {
+	server.RunOnce(func() {
+		timer := time.NewTicker(t)
+		isExit := false
+		for {
+			select {
+			case <-timer.C:
+				isExit = callBack()
+			}
+			if isExit {
+				break
+			}
+
+			if server.IsStop() {
+				break
+			}
+		}
+	})
 }

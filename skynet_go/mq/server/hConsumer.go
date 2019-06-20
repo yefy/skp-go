@@ -38,6 +38,11 @@ func (c *SHConsumer) Error(connVersion int32) {
 }
 
 func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
+	if mqMsg == nil && c.client.harbor == 0 {
+		c.client.server.ClientError(c.client)
+		return
+	}
+
 	if mqMsg.GetTyp() == mq.TypeRespond {
 		harbor := mqMsg.GetHarbor()
 		harborClientI, ok := c.client.server.harborClient.Load(harbor)
