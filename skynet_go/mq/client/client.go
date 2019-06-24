@@ -135,6 +135,10 @@ func (c *Client) Start() error {
 	return nil
 }
 
+func (c *Client) GetDescribe() string {
+	return c.instance
+}
+
 func (c *Client) GetInstance(instance string) string {
 	if len(c.instance) < 1 {
 		pid := os.Getpid()

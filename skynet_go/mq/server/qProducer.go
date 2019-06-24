@@ -24,45 +24,34 @@ type SQProducer struct {
 }
 
 func (q *SQProducer) GetClient() bool {
-	topicClients := q.server.topicClientsMap[q.topic]
-	if topicClients != nil {
-		for _, v := range topicClients.harborClient {
-			if v.IsSubscribe(q.tag) {
-				q.client = v
-				return true
-			}
-		}
-	}
-
-	q.client = nil
-	return false
+	q.client = q.server.GetClient(q.topic, q.tag)
+	return q.client != nil
 }
 
-func (q *SQProducer) GetDescribe() string {
-	return ""
-}
-
-func (q *SQProducer) GetConn() (mq.ConnI, int32, bool) {
+func (q *SQProducer) GetConn() mq.ConnI {
 	if q.client == nil {
 		if !q.GetClient() {
-			return nil, 0, false
+			return nil
 		}
 	}
 
 	if (q.client.GetState() & mq.ClientStateStopSubscribe) > 0 {
 		q.client = nil
-		return nil, 0, false
+		return nil
 	}
 
 	if (q.client.GetState() & mq.ClientStateStart) > 0 {
-		connI, connVersion := q.client.GetConn()
-		return connI, connVersion, true
+		return q.client.GetConn()
 	}
 
-	return nil, 0, false
+	return nil
 }
 
-func (q *SQProducer) Error(connVersion int32) {
-	q.client.Error(connVersion)
+func (q *SQProducer) GetDescribe() string {
+	return q.key
+}
+
+func (q *SQProducer) Error(connI mq.ConnI) {
+	q.client.Error(connI)
 	q.client = nil
 }

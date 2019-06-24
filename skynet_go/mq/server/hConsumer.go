@@ -20,21 +20,20 @@ type SHConsumer struct {
 	*mq.Consumer
 }
 
-func (c *SHConsumer) GetDescribe() string {
-	return ""
-}
-
-func (c *SHConsumer) GetConn() (mq.ConnI, int32, bool) {
+func (c *SHConsumer) GetConn() mq.ConnI {
 	if (c.client.GetState() & mq.ClientStateStart) > 0 {
-		connI, connVersion := c.client.GetConn()
-		return connI, connVersion, true
+		return c.client.GetConn()
 	}
 
-	return nil, 0, false
+	return nil
 }
 
-func (c *SHConsumer) Error(connVersion int32) {
-	c.client.Error(connVersion)
+func (c *SHConsumer) GetDescribe() string {
+	return c.client.GetDescribe()
+}
+
+func (c *SHConsumer) Error(connI mq.ConnI) {
+	c.client.Error(connI)
 }
 
 func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {

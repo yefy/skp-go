@@ -5,9 +5,9 @@ import (
 	"skp-go/skynet_go/rpc/rpcU"
 )
 
-func NewCHProducer(cient *Client) *CHProducer {
+func NewCHProducer(client *Client) *CHProducer {
 	p := &CHProducer{}
-	p.cient = cient
+	p.client = client
 	p.Producer = mq.NewProducer(p)
 	rpcU.NewServer(p)
 	return p
@@ -16,22 +16,21 @@ func NewCHProducer(cient *Client) *CHProducer {
 type CHProducer struct {
 	rpcU.ServerB
 	*mq.Producer
-	cient *Client
+	client *Client
+}
+
+func (p *CHProducer) GetConn() mq.ConnI {
+	if (p.client.GetState() & mq.ClientStateStart) > 0 {
+		return p.client.GetConn()
+	}
+
+	return nil
 }
 
 func (p *CHProducer) GetDescribe() string {
-	return ""
+	return p.client.GetDescribe()
 }
 
-func (p *CHProducer) GetConn() (mq.ConnI, int32, bool) {
-	if (p.cient.GetState() & mq.ClientStateStart) > 0 {
-		connI, connVersion := p.cient.GetConn()
-		return connI, connVersion, true
-	}
-
-	return nil, 0, false
-}
-
-func (p *CHProducer) Error(connVersion int32) {
-	p.cient.Error(connVersion)
+func (p *CHProducer) Error(connI mq.ConnI) {
+	p.client.Error(connI)
 }

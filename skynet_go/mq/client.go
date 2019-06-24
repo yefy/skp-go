@@ -1,6 +1,7 @@
 package mq
 
 import (
+	"reflect"
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 )
@@ -17,24 +18,24 @@ func NewClient(connI ConnI) *Client {
 
 type Client struct {
 	rpcU.ServerB
-	mutex       sync.Mutex
-	connI       ConnI
-	connVersion int32
-	state       int32
+	mutex sync.Mutex
+	connI ConnI
+	state int32
 }
 
-func (c *Client) Error(connVersion int32) {
+func (c *Client) Error(connI ConnI) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
-	if connVersion != c.connVersion {
+	if c.state == ClientStateErr {
 		return
 	}
-	if c.connI != nil {
-		c.connI.Close()
-		c.connI = nil
+
+	if reflect.ValueOf(c.connI).Pointer() != reflect.ValueOf(connI).Pointer() {
+		return
 	}
-	c.connVersion++
+
+	c.connI.Close()
 	c.state = ClientStateErr
 }
 
@@ -46,10 +47,10 @@ func (c *Client) GetState() int32 {
 	return c.state
 }
 
-func (c *Client) GetConn() (ConnI, int32) {
+func (c *Client) GetConn() ConnI {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
-	return c.connI, c.connVersion
+	return c.connI
 }
 
 func (c *Client) SetConn(connI ConnI) {
@@ -58,7 +59,6 @@ func (c *Client) SetConn(connI ConnI) {
 	c.mutex.Lock()
 
 	c.connI = connI
-	c.connVersion++
 	c.state = ClientStateStart
 }
 
@@ -67,7 +67,6 @@ func (c *Client) ClearConn() {
 	c.mutex.Lock()
 
 	c.connI = nil
-	c.connVersion++
 	c.state = ClientStateInit
 }
 

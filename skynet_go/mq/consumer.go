@@ -9,23 +9,23 @@ import (
 
 type ConsumerI interface {
 	DoMqMsg(*MqMsg)
-	GetConn() (ConnI, int32, bool)
+	GetConn() ConnI
 	GetDescribe() string
-	Error(int32)
+	Error(ConnI)
 }
 
 func NewConsumer(cI ConsumerI) *Consumer {
 	c := &Consumer{}
 	c.cI = cI
 	rpcU.NewServer(c)
+	c.mqConn = NewMqConn()
 	return c
 }
 
 type Consumer struct {
 	rpcU.ServerB
-	cI          ConsumerI
-	mqConn      *MqConn
-	connVersion int32
+	cI     ConsumerI
+	mqConn *MqConn
 }
 
 func (c *Consumer) Start() {
@@ -40,21 +40,15 @@ func (c *Consumer) Stop() {
 }
 
 func (c *Consumer) GetConn() bool {
-	if c.mqConn != nil {
+	if c.mqConn.IsOk() {
 		return true
 	}
 
-	connI, connVersion, ok := c.cI.GetConn()
-	if !ok {
-		return ok
-	}
-
-	if c.connVersion == connVersion {
+	connI := c.cI.GetConn()
+	if connI == nil {
 		return false
 	}
 
-	c.connVersion = connVersion
-	c.mqConn = NewMqConn()
 	c.mqConn.SetConn(connI)
 
 	return true
@@ -65,8 +59,7 @@ func (c *Consumer) GetDescribe() string {
 }
 
 func (c *Consumer) Error() {
-	c.mqConn = nil
-	c.cI.Error(c.connVersion)
+	c.cI.Error(c.mqConn.GetConn())
 }
 
 func (c *Consumer) OnReadMqMsg() {

@@ -160,7 +160,7 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 	}
 
 	if request.Harbor > 0 {
-		connI, _ := newClient.GetConn()
+		connI := newClient.GetConn()
 		clientI, clientOk := s.instanceClient.Load(request.Instance)
 		if clientOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
@@ -230,4 +230,16 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 		s.harborClient.Store(newClient.harbor, newClient)
 		//newClient.Start()
 	}
+}
+
+func (s *Server) GetClient(topic string, tag string) *Client {
+	topicClients := s.topicClientsMap[topic]
+	if topicClients != nil {
+		for _, v := range topicClients.harborClient {
+			if v.IsSubscribe(tag) {
+				return v
+			}
+		}
+	}
+	return nil
 }

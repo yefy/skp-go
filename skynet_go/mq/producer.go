@@ -7,15 +7,16 @@ import (
 )
 
 type ProducerI interface {
-	GetConn() (ConnI, int32, bool)
+	GetConn() ConnI
 	GetDescribe() string
-	Error(int32)
+	Error(ConnI)
 }
 
 func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
 	p.pI = pI
 	rpcU.NewServer(p)
+	p.mqConn = NewMqConn()
 
 	// p.RPC_GetServer().Timer(time.Second, func() bool {
 	// 	p.OnTimeOut()
@@ -27,9 +28,8 @@ func NewProducer(pI ProducerI) *Producer {
 
 type Producer struct {
 	rpcU.ServerB
-	pI          ProducerI
-	mqConn      *MqConn
-	connVersion int32
+	pI     ProducerI
+	mqConn *MqConn
 }
 
 func (p *Producer) Start() {
@@ -42,24 +42,19 @@ func (p *Producer) Stop() {
 }
 
 func (p *Producer) GetConn() bool {
-	if p.mqConn != nil {
+	if p.mqConn.IsOk() {
 		return true
 	}
 
-	connI, connVersion, ok := p.pI.GetConn()
-	if !ok {
-		return ok
-	}
-
-	if p.connVersion == connVersion {
+	connI := p.pI.GetConn()
+	if connI == nil {
 		return false
 	}
 
-	p.connVersion = connVersion
-	p.mqConn = NewMqConn()
-	p.mqConn.SetConn(connI)
-	//___yefy
-	//重新发送 未响应的数据包
+	if p.mqConn.SetConn(connI) {
+		//___yefy
+		//重新发送 未响应的数据包
+	}
 
 	return true
 }
@@ -69,8 +64,7 @@ func (p *Producer) GetDescribe() string {
 }
 
 func (p *Producer) Error() {
-	p.mqConn = nil
-	p.pI.Error(p.connVersion)
+	p.pI.Error(p.mqConn.GetConn())
 }
 
 // func (p *Producer) OnTimeOut() {

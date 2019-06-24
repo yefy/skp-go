@@ -36,6 +36,10 @@ type Client struct {
 	*mq.Client
 }
 
+func (c *Client) GetDescribe() string {
+	return c.instance
+}
+
 func (c *Client) Start() {
 	c.shConsumer.Start()
 	c.shProducer.Start()

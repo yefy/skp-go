@@ -16,19 +16,18 @@ type SHProducer struct {
 	*mq.Producer
 }
 
-func (p *SHProducer) GetDescribe() string {
-	return ""
-}
-
-func (p *SHProducer) GetConn() (mq.ConnI, int32, bool) {
+func (p *SHProducer) GetConn() mq.ConnI {
 	if (p.client.GetState() & mq.ClientStateStart) > 0 {
-		connI, connVersion := p.client.GetConn()
-		return connI, connVersion, true
+		return p.client.GetConn()
 	}
 
-	return nil, 0, false
+	return nil
 }
 
-func (p *SHProducer) Error(connVersion int32) {
-	p.client.Error(connVersion)
+func (p *SHProducer) GetDescribe() string {
+	return p.client.GetDescribe()
+}
+
+func (p *SHProducer) Error(connI mq.ConnI) {
+	p.client.Error(connI)
 }

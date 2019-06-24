@@ -1,18 +1,13 @@
 package mq
 
 import (
+	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/utility"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-)
-
-const (
-	SocketError int32 = iota
-	EnCodeError
-	DeCodeError
 )
 
 func NewMqConn() *MqConn {
@@ -23,14 +18,43 @@ func NewMqConn() *MqConn {
 type MqConn struct {
 	vector *Vector
 	connI  ConnI
+	isOk   bool
 }
 
-func (mc *MqConn) SetConn(connI ConnI) {
-	if connI != nil {
+func (mc *MqConn) IsOk() bool {
+	return mc.isOk
+}
+
+func (mc *MqConn) SetConn(connI ConnI) bool {
+	if connI == nil {
+		return false
+	}
+
+	defer func() {
+		mc.isOk = true
+	}()
+
+	if mc.connI == nil {
 		mc.connI = connI
 		mc.vector = NewVector()
 		mc.vector.SetConn(mc.connI)
+		return true
+	} else {
+		if reflect.ValueOf(mc.connI).Pointer() != reflect.ValueOf(connI).Pointer() {
+			mc.connI = connI
+			mc.vector = NewVector()
+			mc.vector.SetConn(mc.connI)
+			return true
+		} else {
+			mc.vector.SetConn(mc.connI)
+			return false
+		}
 	}
+	return true
+}
+
+func (mc *MqConn) GetConn() ConnI {
+	return mc.connI
 }
 
 func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {
@@ -38,7 +62,9 @@ func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {
 
 	mqMsgBytes, err := proto.Marshal(mqMsg)
 	if err != nil {
-		return log.Panic(errorCode.NewErrCode(EnCodeError, err.Error()))
+		log.Err("proto.Marshal(mqMsg) err = %+v", mqMsg)
+		return nil
+		//return log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
 
 	if err := mc.Write(mqMsgBytes); err != nil {
@@ -48,12 +74,18 @@ func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {
 	return nil
 }
 
-func (mc *MqConn) Write(bytes []byte) error {
-	if err := mc.WriteSize(len(bytes)); err != nil {
+func (mc *MqConn) Write(bytes []byte) (err error) {
+	defer func() {
+		if err != nil {
+			mc.isOk = false
+		}
+	}()
+
+	if err = mc.writeSize(len(bytes)); err != nil {
 		return err
 	}
 
-	err := mc.WriteBytes(bytes)
+	err = mc.writeBytes(bytes)
 	if err != nil {
 		return err
 	}
@@ -61,14 +93,14 @@ func (mc *MqConn) Write(bytes []byte) error {
 	return nil
 }
 
-func (mc *MqConn) WriteSize(size int) error {
+func (mc *MqConn) writeSize(size int) error {
 	var err error
 	bytes, err := utility.IntToBytes(size)
 	if err != nil {
 		return err
 	}
 
-	err = mc.WriteBytes(bytes)
+	err = mc.writeBytes(bytes)
 	if err != nil {
 		return err
 	}
@@ -76,7 +108,7 @@ func (mc *MqConn) WriteSize(size int) error {
 	return nil
 }
 
-func (mc *MqConn) WriteBytes(bytes []byte) error {
+func (mc *MqConn) writeBytes(bytes []byte) error {
 	size := len(bytes)
 	for size > 0 {
 		wSize, err := mc.connI.Write(bytes)
@@ -94,9 +126,15 @@ func (mc *MqConn) WriteBytes(bytes []byte) error {
 	return nil
 }
 
-func (mc *MqConn) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
+func (mc *MqConn) ReadMqMsg(timeout time.Duration) (rMqMsg *MqMsg, err error) {
+	defer func() {
+		if err != nil {
+			mc.isOk = false
+		}
+	}()
+
 	for {
-		rMqMsg, err := mc.getMqMsg()
+		rMqMsg, err = mc.getMqMsg()
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +143,7 @@ func (mc *MqConn) ReadMqMsg(timeout time.Duration) (*MqMsg, error) {
 			return rMqMsg, nil
 		}
 
-		if err := mc.vector.Read(timeout); err != nil {
+		if err = mc.vector.Read(timeout); err != nil {
 			return nil, err
 		}
 	}
@@ -147,7 +185,7 @@ func (mc *MqConn) getMqMsg() (*MqMsg, error) {
 
 	msg := &MqMsg{}
 	if err := proto.Unmarshal(msgByte, msg); err != nil {
-		return nil, log.Panic(errorCode.NewErrCode(DeCodeError, err.Error()))
+		return nil, log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
 	mc.vector.Skip(size)
 	log.Fatal("msg = %+v", proto.MarshalTextString(msg))
