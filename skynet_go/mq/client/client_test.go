@@ -36,5 +36,5 @@ func Test_Client1(t *testing.T) {
 	}
 
 	log.Fatal("reply.Harbor = %d", reply.Harbor)
-	mqClient.Exit()
+	mqClient.Close()
 }

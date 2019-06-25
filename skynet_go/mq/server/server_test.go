@@ -45,7 +45,7 @@ func LocalClientTest(s *server.Server) {
 	}
 
 	log.Fatal("reply.Harbor = %d", reply.Harbor)
-	mqClient.Exit()
+	mqClient.Close()
 }
 
 func Test_Server(t *testing.T) {

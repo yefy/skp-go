@@ -10,30 +10,28 @@ import (
 
 func NewClient(server *Server, connI mq.ConnI) *Client {
 	c := &Client{}
+	c.Client = mq.NewClient(connI)
+	rpcU.NewServer(c)
 	c.server = server
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
-	c.Client = mq.NewClient(connI)
-	rpcU.NewServer(c)
 
 	return c
 }
 
 type Client struct {
+	*mq.Client
 	rpcU.ServerB
-	server   *Server
-	harbor   int32
-	instance string //topic_$$
-	mutex    sync.Mutex
-
-	topic  string
-	tag    string
-	tags   []string
-	tagMap map[string]bool
-
+	server     *Server
 	shConsumer *SHConsumer
 	shProducer *SHProducer
-	*mq.Client
+	harbor     int32
+	instance   string //topic_$$
+	mutex      sync.Mutex
+	topic      string
+	tag        string
+	tags       []string
+	tagMap     map[string]bool
 }
 
 func (c *Client) GetDescribe() string {
@@ -51,17 +49,15 @@ func (c *Client) Stop() {
 }
 
 func (c *Client) Close() {
+	c.SetState(mq.ClientStateStopping)
 	c.Stop()
 	c.RPC_GetServer().Stop(false)
-	c.Client.Close()
+	c.CloseConn()
+	c.SetState(mq.ClientStateStop)
 }
 
-func (c *Client) SendOnCloseAll() {
-	c.RPC_GetServer().Send("OnCloseAll")
-}
-
-func (c *Client) OnCloseAll() {
-	c.Close()
+func (c *Client) CloseSelf() {
+	go c.Close()
 }
 
 func (c *Client) Subscribe(topic string, tag string) {
@@ -99,4 +95,25 @@ func (c *Client) IsSubscribeAll() bool {
 	}
 
 	return false
+}
+
+func (c *Client) RegisterMqMsg(mqMsg *mq.MqMsg) {
+	if mqMsg.GetClass() != "Mq" {
+		log.Err("mqMsg.GetClass() != Mq")
+		return
+	}
+
+	if mqMsg.GetMethod() == mq.OnMqRegister {
+		c.server.OnClientRegister(c, mqMsg)
+
+	} else if mqMsg.GetMethod() == mq.OnMqStopSubscribe {
+		c.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
+
+	} else if mqMsg.GetMethod() == mq.OnMqClose {
+		//清除client
+		c.CloseSelf()
+
+	} else {
+		log.Err("not class = %+v or method = %+v", mqMsg.GetClass(), mqMsg.GetMethod())
+	}
 }

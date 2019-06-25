@@ -128,10 +128,9 @@ func (server *Server) Start(isNewCache bool) {
 	}
 }
 
-func (server *Server) SendStop(waitMsg bool) {
-	go func() {
-		server.Stop(waitMsg)
-	}()
+func (server *Server) StopSelf(waitMsg bool) {
+	go server.Stop(waitMsg)
+
 }
 
 func (server *Server) Stop(waitMsg bool) {
@@ -217,7 +216,7 @@ func (server *Server) RunOnce(callBack WaitCallBack) {
 	}()
 }
 
-func (server *Server) Timer(t time.Duration, callBack WaitCallBack2) {
+func (server *Server) Ticker(t time.Duration, callBack WaitCallBack2) {
 	server.RunOnce(func() {
 		timer := time.NewTicker(t)
 		isExit := false
@@ -235,4 +234,19 @@ func (server *Server) Timer(t time.Duration, callBack WaitCallBack2) {
 			}
 		}
 	})
+}
+
+func (server *Server) Timer(t time.Duration, callBack WaitCallBack) bool {
+	timer := time.NewTimer(t)
+	ch := make(chan bool)
+	go func() {
+		callBack()
+		ch <- true
+	}()
+	select {
+	case <-timer.C:
+		return true
+	case <-ch:
+		return false
+	}
 }

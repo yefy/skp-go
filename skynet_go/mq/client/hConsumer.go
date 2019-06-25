@@ -3,22 +3,19 @@ package client
 import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewCHConsumer(client *Client) *CHConsumer {
 	c := &CHConsumer{}
-	rpcU.NewServer(c)
-	c.client = client
 	c.Consumer = mq.NewConsumer(c)
+	c.client = client
 	c.Start()
 	return c
 }
 
 type CHConsumer struct {
-	rpcU.ServerB
-	client *Client
 	*mq.Consumer
+	client *Client
 }
 
 func (c *CHConsumer) GetConn() mq.ConnI {
@@ -42,22 +39,22 @@ func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 		return
 	}
 
+	if rMqMsg.GetTopic() == "Mq" || rMqMsg.GetTag() == "*" {
+		c.client.RegisterMqMsg(rMqMsg)
+		return
+	}
+
 	if rMqMsg.GetTyp() == mq.TypeRespond {
-		pendingMsgI, ok := c.client.pendingMap.Load(rMqMsg.GetPendingSeq())
-		if !ok {
-			log.Fatal("not rMqMsg.PendingSeq = %d", rMqMsg.PendingSeq)
+		pendingMsg := c.client.GetPendingMsg(rMqMsg)
+		if pendingMsg == nil {
 			return
 		}
-		c.client.pendingMap.Delete(rMqMsg.GetPendingSeq())
-		pendingMsg := pendingMsgI.(*PendingMsg)
 		if pendingMsg.typ == mq.TypeCall {
 			pendingMsg.pending <- rMqMsg
 		}
 	} else {
-		//___yefy 有序待添加
-		rpcServer := c.client.rpcEMap[rMqMsg.GetClass()]
+		rpcServer := c.client.GetRPCServer(rMqMsg)
 		if rpcServer == nil {
-			log.Fatal("not rMqMsg.GetClass() = %+v", rMqMsg.GetClass())
 			return
 		}
 		rpcServer.SendReq(rMqMsg.GetEncode(), rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
@@ -67,7 +64,7 @@ func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 				log.Err(err.Error())
 				return
 			}
-			c.client.chProducer.SendWriteMqMsg(sMqMsg)
+			c.client.chProducer.RpcSend_OnWriteMqMsg(sMqMsg)
 		})
 	}
 }

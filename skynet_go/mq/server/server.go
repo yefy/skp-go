@@ -57,14 +57,16 @@ func (s *Server) Listen(address string) error {
 		return log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	s.RPC_GetServer().Addoroutine(1)
-	if err := s.RPC_GetServer().Send("Accept"); err != nil {
-		return log.Panic(errorCode.NewErrCode(0, err.Error()))
-	}
+	s.rpcSend_OnAccept()
 	return nil
 }
 
-func (s *Server) Accept() {
+func (s *Server) rpcSend_OnAccept() {
+	s.RPC_GetServer().Addoroutine(1)
+	s.RPC_GetServer().Send("OnAccept")
+}
+
+func (s *Server) OnAccept() {
 	for {
 		if s.RPC_GetServer().IsStop() {
 			log.Fatal("Accept stop")
@@ -83,9 +85,17 @@ func (s *Server) Accept() {
 		}
 
 		log.Fatal("本地IP地址: %s, 远程IP地址:%s", tcpConn.LocalAddr(), tcpConn.RemoteAddr())
-		//输出：220.181.111.188:80
-		go s.OnConn(tcpConn)
+		go s.AddClient(tcpConn)
 	}
+}
+
+func (s *Server) AddClient(connI mq.ConnI) {
+	newClient := NewClient(s, connI)
+	newClient.Start()
+}
+
+func (s *Server) AddLocalClient(connI mq.ConnI) {
+	go s.AddClient(connI)
 }
 
 func (s *Server) Close() {
@@ -93,46 +103,6 @@ func (s *Server) Close() {
 		log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
 	s.RPC_GetServer().Stop(true)
-}
-
-func (s *Server) ClientError(c *Client) {
-	c.Close()
-}
-
-func (s *Server) OnRegisterMqMsg(c *Client, mqMsg *mq.MqMsg) {
-	if mqMsg.GetTopic() != "Mq" || mqMsg.GetTag() != "*" {
-		s.ClientError(c)
-		return
-	}
-
-	if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientRegister" {
-		s.OnClientRegister(c, mqMsg)
-	} else if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientStopSubscribe" {
-		s.OnClientStopSubscribe(c, mqMsg)
-	} else if mqMsg.GetClass() == "Mq" && mqMsg.GetMethod() == "OnClientClose" {
-		s.OnClientClose(c, mqMsg)
-	} else {
-		log.Err("not class = %+v or method = %+v", mqMsg.GetClass(), mqMsg.GetMethod())
-	}
-}
-
-func (s *Server) OnRegisterLocal(connI mq.ConnI) {
-	s.OnConn(connI)
-}
-
-func (s *Server) OnConn(connI mq.ConnI) {
-	newClient := NewClient(s, connI)
-	newClient.Start()
-}
-
-func (s *Server) OnClientStopSubscribe(c *Client, rMqMsg *mq.MqMsg) {
-	c.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
-}
-
-func (s *Server) OnClientClose(c *Client, rMqMsg *mq.MqMsg) {
-	c.SetState(mq.ClientStateStop)
-	c.Close()
-
 }
 
 func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
@@ -155,12 +125,11 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 		reply.Harbor = replyClient.harbor
 		sMqMsg, err := mq.ReplyMqMsg(replyClient.harbor, rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), &reply)
 		if err == nil {
-			replyClient.shProducer.SendWriteMqMsg(sMqMsg)
+			replyClient.shProducer.RpcSend_OnWriteMqMsg(sMqMsg)
 		}
 	}
 
 	if request.Harbor > 0 {
-		connI := newClient.GetConn()
 		clientI, clientOk := s.instanceClient.Load(request.Instance)
 		if clientOk == false {
 			log.Err("not request.Instance = %+v", request.Instance)
@@ -174,7 +143,7 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 			newClient.Close()
 		} else {
 			replyFunc(newClient)
-			newClient.Client.ClearConn()
+			connI := newClient.Client.ClearConn2()
 			newClient.Close()
 			client.SetConn(connI)
 		}
@@ -201,7 +170,7 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 				//topicClientsMap all conn  close
 				for harbor, conn := range topicClients.harborClient {
 					log.Fatal("SendOnCloseAll harbor", harbor)
-					conn.SendOnCloseAll()
+					conn.CloseSelf()
 				}
 				topicClients = NewTopicClients()
 				s.topicClientsMap[newClient.topic] = topicClients
@@ -212,7 +181,7 @@ func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
 					for _, tag := range newClient.tags {
 						if conn.IsSubscribe(tag) {
 							log.Fatal("SendOnCloseAll harbor", harbor)
-							conn.SendOnCloseAll()
+							conn.CloseSelf()
 							delHarbors = append(delHarbors, harbor)
 							break
 						}
@@ -242,4 +211,27 @@ func (s *Server) GetClient(topic string, tag string) *Client {
 		}
 	}
 	return nil
+}
+
+func (s *Server) GetHarborClient(mqMsg *mq.MqMsg) *Client {
+	harbor := mqMsg.GetHarbor()
+	harborClientI, ok := s.harborClient.Load(harbor)
+	if ok {
+		harborClient := harborClientI.(*Client)
+		return harborClient
+	}
+	//这里需要保存mqMsg用于排查问题
+	log.Fatal("not harbor = %d", harbor)
+	return nil
+}
+
+func (s *Server) GetSQProducer(mqMsg *mq.MqMsg) *SQProducer {
+	key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
+	q := s.topicTag[key]
+	if q == nil {
+		log.Fatal("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
+		q = NewSQProducer(s, mqMsg.GetTopic(), mqMsg.GetTag())
+		s.topicTag[key] = q
+	}
+	return q
 }

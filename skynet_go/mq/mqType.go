@@ -15,3 +15,8 @@ const (
 	ClientStateStopping
 	ClientStateStop
 )
+
+var OnMqRegister string = "OnMqRegister"
+var OnMqStopSubscribe string = "OnMqStopSubscribe"
+var OnMqClosing string = "OnMqClosing"
+var OnMqClose string = "OnMqClose"

@@ -6,20 +6,20 @@ import (
 
 func NewSQProducer(server *Server, topic string, tag string) *SQProducer {
 	q := &SQProducer{}
+	q.Producer = mq.NewProducer(q)
 	q.server = server
 	q.topic = topic
 	q.tag = tag
 	q.key = q.topic + "_" + q.tag
-	q.Producer = mq.NewProducer(q)
 	return q
 }
 
 type SQProducer struct {
+	*mq.Producer
 	server *Server
 	topic  string
 	tag    string
 	key    string
-	*mq.Producer
 	client *Client
 }
 

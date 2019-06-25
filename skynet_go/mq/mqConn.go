@@ -46,7 +46,7 @@ func (mc *MqConn) SetConn(connI ConnI) bool {
 			mc.vector.SetConn(mc.connI)
 			return true
 		} else {
-			mc.vector.SetConn(mc.connI)
+			//mc.vector.SetConn(mc.connI)
 			return false
 		}
 	}

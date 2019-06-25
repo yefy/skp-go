@@ -9,9 +9,7 @@ import (
 func NewClient(connI ConnI) *Client {
 	c := &Client{}
 	rpcU.NewServer(c)
-	if connI != nil {
-		c.SetConn(connI)
-	}
+	c.SetConn(connI)
 
 	return c
 }
@@ -35,45 +33,61 @@ func (c *Client) Error(connI ConnI) {
 		return
 	}
 
-	c.connI.Close()
+	c.closeConn()
 	c.state = ClientStateErr
 }
 
 func (c *Client) SetState(state int32) {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+
 	c.state = state
 }
 
 func (c *Client) GetState() int32 {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+
 	return c.state
 }
 
 func (c *Client) GetConn() ConnI {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
+
 	return c.connI
 }
 
 func (c *Client) SetConn(connI ConnI) {
-	c.Close()
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
+
+	c.closeConn()
 
 	c.connI = connI
 	c.state = ClientStateStart
 }
 
-func (c *Client) ClearConn() {
+func (c *Client) ClearConn2() ConnI {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
+	connI := c.connI
 	c.connI = nil
+	c.state = ClientStateInit
+
+	return connI
+}
+
+func (c *Client) CloseConn() {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+
+	c.closeConn()
 	c.state = ClientStateInit
 }
 
-func (c *Client) Close() {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
-
+func (c *Client) closeConn() {
 	if c.connI != nil {
 		c.connI.Close()
 		c.connI = nil

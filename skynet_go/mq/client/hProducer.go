@@ -2,19 +2,16 @@ package client
 
 import (
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpcU"
 )
 
 func NewCHProducer(client *Client) *CHProducer {
 	p := &CHProducer{}
-	p.client = client
 	p.Producer = mq.NewProducer(p)
-	rpcU.NewServer(p)
+	p.client = client
 	return p
 }
 
 type CHProducer struct {
-	rpcU.ServerB
 	*mq.Producer
 	client *Client
 }

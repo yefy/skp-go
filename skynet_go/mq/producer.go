@@ -14,8 +14,8 @@ type ProducerI interface {
 
 func NewProducer(pI ProducerI) *Producer {
 	p := &Producer{}
-	p.pI = pI
 	rpcU.NewServer(p)
+	p.pI = pI
 	p.mqConn = NewMqConn()
 
 	// p.RPC_GetServer().Timer(time.Second, func() bool {
@@ -42,9 +42,9 @@ func (p *Producer) Stop() {
 }
 
 func (p *Producer) GetConn() bool {
-	if p.mqConn.IsOk() {
-		return true
-	}
+	// if p.mqConn.IsOk() {
+	// 	return true
+	// }
 
 	connI := p.pI.GetConn()
 	if connI == nil {
@@ -72,7 +72,7 @@ func (p *Producer) Error() {
 // 	p.SendWriteMqMsg(nil)
 // }
 
-func (p *Producer) SendWriteMqMsg(mqMsg *MqMsg) {
+func (p *Producer) RpcSend_OnWriteMqMsg(mqMsg *MqMsg) {
 	p.RPC_GetServer().Send("OnWriteMqMsg", mqMsg)
 }
 

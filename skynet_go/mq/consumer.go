@@ -16,8 +16,8 @@ type ConsumerI interface {
 
 func NewConsumer(cI ConsumerI) *Consumer {
 	c := &Consumer{}
-	c.cI = cI
 	rpcU.NewServer(c)
+	c.cI = cI
 	c.mqConn = NewMqConn()
 	return c
 }
@@ -40,9 +40,9 @@ func (c *Consumer) Stop() {
 }
 
 func (c *Consumer) GetConn() bool {
-	if c.mqConn.IsOk() {
-		return true
-	}
+	// if c.mqConn.IsOk() {
+	// 	return true
+	// }
 
 	connI := c.cI.GetConn()
 	if connI == nil {

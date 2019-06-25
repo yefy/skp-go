@@ -8,7 +8,6 @@ import (
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc"
 	"skp-go/skynet_go/rpc/rpcE"
 	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
@@ -66,15 +65,18 @@ func NewClient(instance string, address string) *Client {
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
-	c.rpcEMap = make(map[string]*rpcE.Server)
+
+	for i := 0; i < len(c.rpcEMapArr); i++ {
+		c.rpcEMapArr[i] = make(map[string]*rpcE.Server)
+	}
 	return c
 }
 
 type ServerI interface {
-	OnRegisterLocal(connI mq.ConnI)
+	AddLocalClient(connI mq.ConnI)
 }
 
-func NewLocalClient(instance string, server ServerI) *Client {
+func NewLocalClient(instance string, serverI ServerI) *Client {
 	c := &Client{}
 	rpcU.NewServer(c)
 	c.pendingSeq = 0
@@ -92,12 +94,14 @@ func NewLocalClient(instance string, server ServerI) *Client {
 	}
 
 	c.Client = mq.NewClient(connI)
-	server.OnRegisterLocal(c.dialConnI.GetS())
+	serverI.AddLocalClient(c.dialConnI.GetS())
 
 	c.chProducer = NewCHProducer(c)
 	c.chConsumer = NewCHConsumer(c)
 
-	c.rpcEMap = make(map[string]*rpcE.Server)
+	for i := 0; i < len(c.rpcEMapArr); i++ {
+		c.rpcEMapArr[i] = make(map[string]*rpcE.Server)
+	}
 	return c
 }
 
@@ -113,14 +117,17 @@ type Client struct {
 	chConsumer     *CHConsumer
 	topic          string
 	tag            string
-	rpcEMap        map[string]*rpcE.Server
+	rpcEMapArr     [10]map[string]*rpcE.Server
 	*mq.Client
 	dialConnI mq.DialConnI
 }
 
 func (c *Client) RegisterServer(obj rpcE.ServerI) {
 	rpcServer := rpcE.NewServer(obj)
-	c.rpcEMap[rpcServer.ObjectName()] = rpcServer
+	for i := 0; i < len(c.rpcEMapArr); i++ {
+		rpcEMap := c.rpcEMapArr[i]
+		rpcEMap[rpcServer.ObjectName()] = rpcServer
+	}
 }
 
 func (c *Client) Subscribe(topic string, tag string) {
@@ -129,7 +136,7 @@ func (c *Client) Subscribe(topic string, tag string) {
 }
 
 func (c *Client) Start() error {
-	if err := c.Register(); err != nil {
+	if err := c.MqRegister(); err != nil {
 		return err
 	}
 	return nil
@@ -137,6 +144,38 @@ func (c *Client) Start() error {
 
 func (c *Client) GetDescribe() string {
 	return c.instance
+}
+
+func (c *Client) GetPendingMsg(rMqMsg *mq.MqMsg) *PendingMsg {
+	pendingMsgI, ok := c.pendingMap.Load(rMqMsg.GetPendingSeq())
+	if !ok {
+		log.Fatal("not rMqMsg.PendingSeq = %d", rMqMsg.PendingSeq)
+		return nil
+	}
+	c.pendingMap.Delete(rMqMsg.GetPendingSeq())
+	pendingMsg := pendingMsgI.(*PendingMsg)
+	return pendingMsg
+}
+
+func (c *Client) GetRPCServer(rMqMsg *mq.MqMsg) *rpcE.Server {
+	var rpcEMap map[string]*rpcE.Server
+	order := rMqMsg.GetOrder()
+	if order == 0 {
+		order = 0
+	} else if order%uint64(len(c.rpcEMapArr)) == 0 {
+		order = 1
+	} else {
+		order = order % uint64(len(c.rpcEMapArr))
+	}
+
+	rpcEMap = c.rpcEMapArr[order]
+
+	rpcServer := rpcEMap[rMqMsg.GetClass()]
+	if rpcServer == nil {
+		log.Fatal("not rMqMsg.GetClass() = %+v", rMqMsg.GetClass())
+		return nil
+	}
+	return rpcServer
 }
 
 func (c *Client) GetInstance(instance string) string {
@@ -168,21 +207,34 @@ func (c *Client) getIP() string {
 	return ""
 }
 
-func (c *Client) DialConn() (mq.ConnI, error) {
-	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
-	if tcpAddrErr != nil {
-		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
+// func (c *Client) DialConn() (mq.ConnI, error) {
+// 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
+// 	if tcpAddrErr != nil {
+// 		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
+// 	}
+
+// 	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
+// 	if tcpConnErr != nil {
+// 		return nil, log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
+// 	}
+
+// 	return tcpConn, nil
+// }
+
+func (c *Client) RegisterMqMsg(mqMsg *mq.MqMsg) {
+	if mqMsg.GetClass() != "Mq" {
+		log.Err("mqMsg.GetClass() != Mq")
+		return
 	}
 
-	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
-	if tcpConnErr != nil {
-		return nil, log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
+	if mqMsg.GetMethod() == mq.OnMqClosing {
+		go c.MqStopSubscribe()
+	} else {
+		log.Err("not class = %+v or method = %+v", mqMsg.GetClass(), mqMsg.GetMethod())
 	}
-
-	return tcpConn, nil
 }
 
-func (c *Client) Register() error {
+func (c *Client) MqRegister() error {
 	request := mq.RegisteRequest{}
 	request.Instance = c.instance
 	request.Harbor = c.harbor
@@ -192,7 +244,7 @@ func (c *Client) Register() error {
 	reply := mq.RegisterReply{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnClientRegister", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq."+mq.OnMqRegister, &request, &reply); err != nil {
 		return errorCode.NewErrCode(0, err.Error())
 	}
 	c.harbor = reply.Harbor
@@ -201,52 +253,61 @@ func (c *Client) Register() error {
 	return nil
 }
 
-func (c *Client) StopSubscribe() {
+func (c *Client) MqStopSubscribe() {
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnClientStopSubscribe", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq."+mq.OnMqStopSubscribe, &request, &reply); err != nil {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
 	c.Client.SetState(mq.ClientStateStopSubscribe)
 
-	log.Fatal("StopSubscribe")
+	log.Fatal("MqStopSubscribe")
 }
 
-func (c *Client) Close() {
+func (c *Client) MqClose() {
 	c.Client.SetState(mq.ClientStateStopping)
 
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
 
 	msg := Msg{Topic: "Mq", Tag: "*"}
-	if err := c.Call(&msg, "Mq.OnClientClose", &request, &reply); err != nil {
+	if err := c.Call(&msg, "Mq."+mq.OnMqClose, &request, &reply); err != nil {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
 	c.Client.SetState(mq.ClientStateStop)
 
-	log.Fatal("Close")
+	log.Fatal("MqClose")
 }
 
 func (c *Client) WaitPending() bool {
-	isExist := true
 	c.pendingMap.Range(func(k, v interface{}) bool {
 		log.Fatal("k= %+v, v = %+v", k, v)
-		isExist = false
 		return false
 	})
 
-	return isExist
+	return true
 }
 
-func (c *Client) Exit() {
-	//c.StopSubscribe()
+func (c *Client) Close() {
+	if true {
+		log.Fatal("Client Close")
+		return
+	}
 
-	rpc.Timer(time.Second, c.WaitPending)
-	//c.Close()
+	c.MqStopSubscribe()
+	c.RPC_GetServer().Ticker(time.Second, c.WaitPending)
+
+	isTimeout := c.RPC_GetServer().Timer(time.Second*10, c.MqClose)
+	if isTimeout {
+		log.Err("MqClose timeout")
+	}
+	c.chProducer.Stop()
+	c.chConsumer.Stop()
+	c.Client.CloseConn()
 }
 
 // func (c *Client) Send(msg *Msg, method string, request interface{}) error {
@@ -292,8 +353,8 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	sMqMsg.Encode = proto.Int32(p.reqEncode)
 	sMqMsg.Body = proto.String(p.reqBody)
 
-	c.chProducer.SendWriteMqMsg(sMqMsg)
-	//c.chProducer.RPC_GetServer().Send("SendMqMsg", sMqMsg)
+	c.chProducer.RpcSend_OnWriteMqMsg(sMqMsg)
+
 	rMqMsgI := <-p.pending
 	rMqMsg := rMqMsgI.(*mq.MqMsg)
 

@@ -6,14 +6,14 @@ import (
 
 func NewSHProducer(client *Client) *SHProducer {
 	p := &SHProducer{}
-	p.client = client
 	p.Producer = mq.NewProducer(p)
+	p.client = client
 	return p
 }
 
 type SHProducer struct {
-	client *Client
 	*mq.Producer
+	client *Client
 }
 
 func (p *SHProducer) GetConn() mq.ConnI {
