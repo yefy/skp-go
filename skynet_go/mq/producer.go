@@ -32,6 +32,10 @@ type Producer struct {
 	mqConn *MqConn
 }
 
+func (p *Producer) RPC_GetDescribe() string {
+	return "NewProducer"
+}
+
 func (p *Producer) Start() {
 	p.Stop()
 	p.RPC_GetServer().Start(false)

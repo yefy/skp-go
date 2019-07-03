@@ -26,7 +26,7 @@ func (c *SHConsumer) GetConn() mq.ConnI {
 }
 
 func (c *SHConsumer) GetDescribe() string {
-	return c.client.GetDescribe()
+	return c.client.GetDescribe() + "_SHConsumer"
 }
 
 func (c *SHConsumer) Error(connI mq.ConnI) {
@@ -49,6 +49,10 @@ func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
 			c.client.CloseSelf()
 			return
 		}
+	}
+
+	if mqMsg == nil {
+		return
 	}
 
 	if mqMsg.GetTopic() == "Mq" {

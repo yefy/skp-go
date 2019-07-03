@@ -21,6 +21,10 @@ type Client struct {
 	state int32
 }
 
+func (c *Client) RPC_GetDescribe() string {
+	return "NewClient"
+}
+
 func (c *Client) Error(connI ConnI) {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()

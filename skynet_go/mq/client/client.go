@@ -78,7 +78,6 @@ type ServerI interface {
 
 func NewLocalClient(instance string, serverI ServerI) *Client {
 	c := &Client{}
-	rpcU.NewServer(c)
 	c.pendingSeq = 0
 	c.instance = c.GetInstance(instance)
 	c.pendingMsgPool = &sync.Pool{New: func() interface{} {
@@ -106,7 +105,6 @@ func NewLocalClient(instance string, serverI ServerI) *Client {
 }
 
 type Client struct {
-	rpcU.ServerB
 	address        string
 	harbor         int32
 	instance       string //xx_ip_$$ (模块名)_(ip)_(进程id)
@@ -143,7 +141,7 @@ func (c *Client) Start() error {
 }
 
 func (c *Client) GetDescribe() string {
-	return c.instance
+	return c.instance + "_c_Client"
 }
 
 func (c *Client) GetPendingMsg(rMqMsg *mq.MqMsg) *PendingMsg {
@@ -262,13 +260,13 @@ func (c *Client) MqStopSubscribe() {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	c.Client.SetState(mq.ClientStateStopSubscribe)
+	c.Client.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
 
 	log.Fatal("MqStopSubscribe")
 }
 
 func (c *Client) MqClose() {
-	c.Client.SetState(mq.ClientStateStopping)
+	c.Client.SetState(mq.ClientStateStart | mq.ClientStateStopping)
 
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
@@ -293,11 +291,6 @@ func (c *Client) WaitPending() bool {
 }
 
 func (c *Client) Close() {
-	if true {
-		log.Fatal("Client Close")
-		return
-	}
-
 	c.MqStopSubscribe()
 	c.RPC_GetServer().Ticker(time.Second, c.WaitPending)
 
@@ -308,6 +301,7 @@ func (c *Client) Close() {
 	c.chProducer.Stop()
 	c.chConsumer.Stop()
 	c.Client.CloseConn()
+	log.Fatal("Client Close")
 }
 
 // func (c *Client) Send(msg *Msg, method string, request interface{}) error {

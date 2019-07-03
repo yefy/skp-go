@@ -7,6 +7,21 @@ import (
 	"time"
 )
 
+type ConnChanError struct {
+}
+
+func (c *ConnChanError) Error() string {
+	return "ConnChan timeout"
+}
+
+func (c *ConnChanError) Timeout() bool {
+	return true
+}
+
+func (c *ConnChanError) Temporary() bool {
+	return true
+}
+
 func NewConnChan() *ConnChan {
 	c := &ConnChan{}
 	c.Cache = make(chan []byte, 1000)
@@ -16,9 +31,11 @@ func NewConnChan() *ConnChan {
 type ConnChan struct {
 	cc    *ConnChan
 	Cache chan []byte
+	t     time.Time
 }
 
 func (c *ConnChan) SetReadDeadline(t time.Time) error {
+	c.t = t
 	return nil
 }
 
@@ -32,9 +49,21 @@ func (c *ConnChan) Write(b []byte) (int, error) {
 }
 
 func (c *ConnChan) Read(b []byte) (int, error) {
-	rb := <-c.cc.Cache
-	copy(b, rb)
-	return len(rb), nil
+	// rb := <-c.cc.Cache
+	// copy(b, rb)
+	// return len(rb), nil
+	t := c.t.Sub(time.Now())
+	timer := time.NewTimer(t)
+	for {
+		select {
+		case <-timer.C:
+			var err net.Error = &ConnChanError{}
+			return 0, err
+		case rb := <-c.cc.Cache:
+			copy(b, rb)
+			return len(rb), nil
+		}
+	}
 }
 
 func (c *ConnChan) Close() error {

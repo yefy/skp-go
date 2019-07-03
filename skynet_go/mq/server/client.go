@@ -3,15 +3,14 @@ package server
 import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
-	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
+	"time"
 )
 
 func NewClient(server *Server, connI mq.ConnI) *Client {
 	c := &Client{}
 	c.Client = mq.NewClient(connI)
-	rpcU.NewServer(c)
 	c.server = server
 	c.shConsumer = NewSHConsumer(c)
 	c.shProducer = NewSHProducer(c)
@@ -21,7 +20,6 @@ func NewClient(server *Server, connI mq.ConnI) *Client {
 
 type Client struct {
 	*mq.Client
-	rpcU.ServerB
 	server     *Server
 	shConsumer *SHConsumer
 	shProducer *SHProducer
@@ -35,7 +33,7 @@ type Client struct {
 }
 
 func (c *Client) GetDescribe() string {
-	return c.instance
+	return c.instance + "_s_Client"
 }
 
 func (c *Client) Start() {
@@ -57,6 +55,7 @@ func (c *Client) Close() {
 }
 
 func (c *Client) CloseSelf() {
+	time.Sleep(time.Second)
 	go c.Close()
 }
 
@@ -103,16 +102,24 @@ func (c *Client) RegisterMqMsg(mqMsg *mq.MqMsg) {
 		return
 	}
 
+	replyFunc := func() {
+		reply := mq.NilStruct{}
+		sMqMsg, err := mq.ReplyMqMsg(c.harbor, mqMsg.GetPendingSeq(), mqMsg.GetEncode(), &reply)
+		if err == nil {
+			c.shProducer.RpcSend_OnWriteMqMsg(sMqMsg)
+		}
+	}
+
 	if mqMsg.GetMethod() == mq.OnMqRegister {
 		c.server.OnClientRegister(c, mqMsg)
 
 	} else if mqMsg.GetMethod() == mq.OnMqStopSubscribe {
+		replyFunc()
 		c.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
 
 	} else if mqMsg.GetMethod() == mq.OnMqClose {
-		//清除client
+		replyFunc()
 		c.CloseSelf()
-
 	} else {
 		log.Err("not class = %+v or method = %+v", mqMsg.GetClass(), mqMsg.GetMethod())
 	}

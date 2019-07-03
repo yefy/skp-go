@@ -28,6 +28,10 @@ type Consumer struct {
 	mqConn *MqConn
 }
 
+func (c *Consumer) RPC_GetDescribe() string {
+	return c.cI.GetDescribe()
+}
+
 func (c *Consumer) Start() {
 	c.Stop()
 	c.RPC_GetServer().Start(false)
@@ -65,7 +69,7 @@ func (c *Consumer) Error() {
 func (c *Consumer) OnReadMqMsg() {
 	for {
 		if c.RPC_GetServer().IsStop() {
-			log.Fatal(c.GetDescribe() + " : Consumer OnReadMqMsg stop")
+			log.Fatal("RPC_GetDescribe = %s : Consumer OnReadMqMsg stop", c.RPC_GetDescribe())
 			return
 		}
 

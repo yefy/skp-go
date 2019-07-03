@@ -48,7 +48,7 @@ func (q *SQProducer) GetConn() mq.ConnI {
 }
 
 func (q *SQProducer) GetDescribe() string {
-	return q.key
+	return q.key + "_SQProducer"
 }
 
 func (q *SQProducer) Error(connI mq.ConnI) {

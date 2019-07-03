@@ -1,10 +1,10 @@
 package mq
 
 const (
-	TypeSend int32 = iota
+	TypeRespond int32 = iota
+	TypeSend
 	TypeSendReq
 	TypeCall
-	TypeRespond
 )
 
 const (

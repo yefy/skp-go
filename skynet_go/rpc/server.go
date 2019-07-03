@@ -45,6 +45,7 @@ func (m *Msg) Init() {
 }
 
 type ServerI interface {
+	RPC_Describe() string
 	RPC_Start()
 	RPC_Stop()
 	RPC_DoMsg(msg *Msg)
@@ -189,7 +190,7 @@ func (server *Server) run(index int32) {
 			if server.isStopping() {
 				return
 			}
-			log.Fatal("server.SendNumber = %d, server.recvNumber = %d", server.SendNumber, server.recvNumber)
+			log.Fatal("RPC_Describe = %s, server.SendNumber = %d, server.recvNumber = %d", server.sI.RPC_Describe(), server.SendNumber, server.recvNumber)
 		case <-done:
 			done = nil
 			if server.isStopping() {
@@ -219,18 +220,16 @@ func (server *Server) RunOnce(callBack WaitCallBack) {
 func (server *Server) Ticker(t time.Duration, callBack WaitCallBack2) {
 	server.RunOnce(func() {
 		timer := time.NewTicker(t)
-		isExit := false
 		for {
 			select {
 			case <-timer.C:
-				isExit = callBack()
-			}
-			if isExit {
-				break
+				if callBack() {
+					return
+				}
 			}
 
 			if server.IsStop() {
-				break
+				return
 			}
 		}
 	})

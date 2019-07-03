@@ -45,6 +45,10 @@ type Server struct {
 	topicTag        map[string]*SQProducer
 }
 
+func (s *Server) RPC_GetDescribe() string {
+	return "NewServer"
+}
+
 func (s *Server) Listen(address string) error {
 	var err error
 	tcpaddr, err := net.ResolveTCPAddr("tcp4", address)

@@ -25,7 +25,7 @@ func (p *CHProducer) GetConn() mq.ConnI {
 }
 
 func (p *CHProducer) GetDescribe() string {
-	return p.client.GetDescribe()
+	return p.client.GetDescribe() + "_CHProducer"
 }
 
 func (p *CHProducer) Error(connI mq.ConnI) {

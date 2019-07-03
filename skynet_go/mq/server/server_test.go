@@ -18,6 +18,10 @@ type Test struct {
 	rpcE.ServerB
 }
 
+func (t *Test) RPC_GetDescribe() string {
+	return "Test"
+}
+
 func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
 	log.Fatal("in = %+v", in)
 	out.Harbor = in.Harbor

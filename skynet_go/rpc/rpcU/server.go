@@ -66,6 +66,7 @@ func NewService(obj ServerI) (*Service, error) {
 }
 
 type ServerI interface {
+	RPC_GetDescribe() string
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Stop()
@@ -111,9 +112,14 @@ func (server *Server) Object() interface{} {
 	return server.service.obj
 }
 
+func (server *Server) RPC_Describe() string {
+	return server.service.obj.RPC_GetDescribe()
+}
+
 func (server *Server) RPC_Start() {
 	server.service.obj.RPC_SetServer(server)
 }
+
 func (server *Server) RPC_Stop() {
 	server.service.obj.RPC_Stop()
 }
