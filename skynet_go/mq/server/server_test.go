@@ -55,7 +55,7 @@ func LocalClientTest(s *server.Server) {
 func Test_Server(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	s := server.NewServer()
-	go LocalClientTest(s)
+	//go LocalClientTest(s)
 	s.Listen(":5673")
 
 	wait := make(chan int)

@@ -9,6 +9,7 @@ import (
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
 	"skp-go/skynet_go/rpc/rpcE"
+
 	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
@@ -44,7 +45,6 @@ type PendingMsg struct {
 
 func NewClient(instance string, address string) *Client {
 	c := &Client{}
-	rpcU.NewServer(c)
 	c.address = address
 	c.pendingSeq = 0
 	c.instance = c.GetInstance(instance)
