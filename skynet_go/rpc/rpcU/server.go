@@ -66,7 +66,7 @@ func NewService(obj ServerI) (*Service, error) {
 }
 
 type ServerI interface {
-	RPC_GetDescribe() string
+	RPC_Describe() string
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Stop()
@@ -78,7 +78,7 @@ type ServerB struct {
 
 func (sb *ServerB) RPC_SetServer(server *Server) {
 	if sb.server != nil {
-		log.Err("sb.server != nil")
+		log.Panic(errorCode.NewErrCode(0, server.RPC_Describe()))
 	}
 	sb.server = server
 }
@@ -97,15 +97,16 @@ type Server struct {
 }
 
 func NewServer(obj ServerI) *Server {
+	log.Fatal("NewServer 0000000000")
 	service, err := NewService(obj)
 	if err != nil {
 		return nil
 	}
-
+	log.Fatal("NewServer 11111111111")
 	server := &Server{}
 	server.service = service
 	server.Server = rpc.NewServer(server)
-
+	log.Fatal("NewServer 2222222222")
 	return server
 }
 func (server *Server) Object() interface{} {
@@ -113,7 +114,7 @@ func (server *Server) Object() interface{} {
 }
 
 func (server *Server) RPC_Describe() string {
-	return server.service.obj.RPC_GetDescribe()
+	return server.service.obj.RPC_Describe()
 }
 
 func (server *Server) RPC_Start() {
@@ -133,7 +134,11 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "Typ = %d, objName = %s, Method = %s, %+v", msg.Typ, server.service.objName, msg.Method, err))
+					log.Err("service.objValue = %+v", service.objValue)
+					for i := 0; i < len(args); i++ {
+						log.Err("i = %d, args = %+v", i, args[i])
+					}
 				}
 			}()
 			valuePool := server.ValuePools[len(args)]
@@ -151,7 +156,11 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "Typ = %d, objName = %s, Method = %s, %+v", msg.Typ, server.service.objName, msg.Method, err))
+					log.Err("service.objValue = %+v", service.objValue)
+					for i := 0; i < len(args); i++ {
+						log.Err("i = %d, args = %+v", i, args[i])
+					}
 				}
 			}()
 			valuePool := server.ValuePools[len(args)-1]
@@ -173,7 +182,11 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "Typ = %d, objName = %s, Method = %s, %+v", msg.Typ, server.service.objName, msg.Method, err))
+					log.Err("service.objValue = %+v", service.objValue)
+					for i := 0; i < len(args); i++ {
+						log.Err("i = %d, args = %+v", i, args[i])
+					}
 				}
 			}()
 
@@ -192,7 +205,11 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "Typ = %d, objName = %s, Method = %s, %+v", msg.Typ, server.service.objName, msg.Method, err))
+					log.Err("service.objValue = %+v", service.objValue)
+					for i := 0; i < len(args); i++ {
+						log.Err("i = %d, args = %+v", i, args[i])
+					}
 				}
 			}()
 

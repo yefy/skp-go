@@ -18,5 +18,5 @@ const (
 
 var OnMqRegister string = "OnMqRegister"
 var OnMqStopSubscribe string = "OnMqStopSubscribe"
-var OnMqClosing string = "OnMqClosing"
+var OnMqClosing string = "OnMqClosing" //通知client退出
 var OnMqClose string = "OnMqClose"

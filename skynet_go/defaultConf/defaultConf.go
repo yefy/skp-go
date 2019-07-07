@@ -8,7 +8,7 @@ import (
 
 func SetDebug() {
 	log.SetPanic(true)
-	errorCode.SetStack(false)
+	errorCode.SetStack(true)
 	rpcU.SetCheck(true)
 }
 

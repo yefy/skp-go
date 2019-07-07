@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"skp-go/skynet_go/encodes"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
 	"skp-go/skynet_go/rpc/rpcE"
-
-	"skp-go/skynet_go/rpc/rpcU"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -44,6 +43,7 @@ type PendingMsg struct {
 }
 
 func NewClient(instance string, address string) *Client {
+	log.Fatal("NewClient1111111 000000000")
 	c := &Client{}
 	c.address = address
 	c.pendingSeq = 0
@@ -54,21 +54,25 @@ func NewClient(instance string, address string) *Client {
 		return msg
 	},
 	}
+	log.Fatal("NewClient1111111 1111111111")
 	c.dialConnI = mq.NewDialTcpConn(address)
-
+	log.Fatal("NewClient1111111 22222222222")
 	connI, err := c.dialConnI.Connect()
+	log.Fatal("NewClient1111111 33333333333")
 	if err != nil {
-		return nil
+		panic(address)
 	}
 
-	c.Client = mq.NewClient(connI)
-
+	c.Client = mq.NewClient(c, connI)
+	log.Fatal("NewClient1111111 444444444444")
 	c.chProducer = NewCHProducer(c)
+	log.Fatal("NewClient1111111 555555555555555555")
 	c.chConsumer = NewCHConsumer(c)
-
+	log.Fatal("NewClient1111111 6666666666666")
 	for i := 0; i < len(c.rpcEMapArr); i++ {
 		c.rpcEMapArr[i] = make(map[string]*rpcE.Server)
 	}
+	log.Fatal("NewClient1111111 777777777777777")
 	return c
 }
 
@@ -92,7 +96,7 @@ func NewLocalClient(instance string, serverI ServerI) *Client {
 		return nil
 	}
 
-	c.Client = mq.NewClient(connI)
+	c.Client = mq.NewClient(c, connI)
 	serverI.AddLocalClient(c.dialConnI.GetS())
 
 	c.chProducer = NewCHProducer(c)
@@ -118,6 +122,7 @@ type Client struct {
 	rpcEMapArr     [10]map[string]*rpcE.Server
 	*mq.Client
 	dialConnI mq.DialConnI
+	mutex     sync.Mutex
 }
 
 func (c *Client) RegisterServer(obj rpcE.ServerI) {
@@ -134,6 +139,7 @@ func (c *Client) Subscribe(topic string, tag string) {
 }
 
 func (c *Client) Start() error {
+	c.SetState(mq.ClientStateStart)
 	if err := c.MqRegister(); err != nil {
 		return err
 	}
@@ -142,6 +148,12 @@ func (c *Client) Start() error {
 
 func (c *Client) GetDescribe() string {
 	return c.instance + "_c_Client"
+}
+
+func (c *Client) Error(connI mq.ConnI) {
+	if c.Client.IsError(connI) {
+		c.CloseSelf()
+	}
 }
 
 func (c *Client) GetPendingMsg(rMqMsg *mq.MqMsg) *PendingMsg {
@@ -177,12 +189,12 @@ func (c *Client) GetRPCServer(rMqMsg *mq.MqMsg) *rpcE.Server {
 }
 
 func (c *Client) GetInstance(instance string) string {
-	if len(c.instance) < 1 {
+	if c.instance == "" {
 		pid := os.Getpid()
 		//addr := strings.Split(c.tcpConn.LocalAddr().String(), ":")[0]
 		addr := c.getIP()
-		c.instance = fmt.Sprintf("%s_%s_%d", instance, addr, pid)
-		log.Fatal("instance = %s", c.instance)
+		c.instance = fmt.Sprintf("%s_%s_%d_%d", instance, addr, pid, reflect.ValueOf(c).Pointer())
+		log.Debug("instance = %s", c.instance)
 	}
 	return c.instance
 }
@@ -204,20 +216,6 @@ func (c *Client) getIP() string {
 	}
 	return ""
 }
-
-// func (c *Client) DialConn() (mq.ConnI, error) {
-// 	tcpAddr, tcpAddrErr := net.ResolveTCPAddr("tcp4", c.address)
-// 	if tcpAddrErr != nil {
-// 		return nil, log.Panic(errorCode.NewErrCode(0, tcpAddrErr.Error()))
-// 	}
-
-// 	tcpConn, tcpConnErr := net.DialTCP("tcp", nil, tcpAddr)
-// 	if tcpConnErr != nil {
-// 		return nil, log.Panic(errorCode.NewErrCode(0, tcpConnErr.Error()))
-// 	}
-
-// 	return tcpConn, nil
-// }
 
 func (c *Client) RegisterMqMsg(mqMsg *mq.MqMsg) {
 	if mqMsg.GetClass() != "Mq" {
@@ -246,12 +244,16 @@ func (c *Client) MqRegister() error {
 		return errorCode.NewErrCode(0, err.Error())
 	}
 	c.harbor = reply.Harbor
-
-	log.Fatal("c.harbor = %d", c.harbor)
 	return nil
 }
 
 func (c *Client) MqStopSubscribe() {
+	if (c.Client.GetState() & (mq.ClientStateStopSubscribe | mq.ClientStateStopping | mq.ClientStateStop)) > 0 {
+		return
+	}
+
+	c.Client.AddState(mq.ClientStateStopSubscribe)
+
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
 
@@ -260,13 +262,15 @@ func (c *Client) MqStopSubscribe() {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	c.Client.SetState(mq.ClientStateStart | mq.ClientStateStopSubscribe)
-
-	log.Fatal("MqStopSubscribe")
+	log.Debug("MqStopSubscribe")
 }
 
 func (c *Client) MqClose() {
-	c.Client.SetState(mq.ClientStateStart | mq.ClientStateStopping)
+	if (c.Client.GetState() & (mq.ClientStateStopping | mq.ClientStateStop)) > 0 {
+		return
+	}
+
+	c.Client.AddState(mq.ClientStateStopping)
 
 	request := mq.NilStruct{}
 	reply := mq.NilStruct{}
@@ -276,32 +280,52 @@ func (c *Client) MqClose() {
 		log.ErrorCode(errorCode.NewErrCode(0, err.Error()))
 	}
 
-	c.Client.SetState(mq.ClientStateStop)
+	c.Client.AddState(mq.ClientStateStop)
 
-	log.Fatal("MqClose")
+	log.Debug("MqClose")
 }
 
 func (c *Client) WaitPending() bool {
 	c.pendingMap.Range(func(k, v interface{}) bool {
-		log.Fatal("k= %+v, v = %+v", k, v)
+		if (c.Client.GetState() & mq.ClientStateErr) > 0 {
+			return true
+		}
+
 		return false
 	})
 
 	return true
 }
 
-func (c *Client) Close() {
-	c.MqStopSubscribe()
-	c.RPC_GetServer().Ticker(time.Second, c.WaitPending)
+func (c *Client) CloseSelf() {
+	go c.Close()
+}
 
-	isTimeout := c.RPC_GetServer().Timer(time.Second*10, c.MqClose)
-	if isTimeout {
-		log.Err("MqClose timeout")
+func (c *Client) Close() {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+
+	if (c.Client.GetState() & (mq.ClientStateStopping | mq.ClientStateStop)) > 0 {
+		return
+	}
+
+	if (c.Client.GetState() & mq.ClientStateErr) > 0 {
+	} else {
+
+		c.MqStopSubscribe()
+
+		c.RPC_GetServer().Ticker(time.Second, c.WaitPending)
+
+		isTimeout := c.RPC_GetServer().Timer(time.Second*10, c.MqClose)
+		if isTimeout {
+			log.Err("MqClose timeout")
+		}
+
+		c.Client.CloseConn()
 	}
 	c.chProducer.Stop()
 	c.chConsumer.Stop()
-	c.Client.CloseConn()
-	log.Fatal("Client Close")
+	log.Debug("Client Close")
 }
 
 // func (c *Client) Send(msg *Msg, method string, request interface{}) error {
@@ -326,7 +350,6 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	p.pendingSeq = atomic.AddUint64(&c.pendingSeq, 1)
 	p.reqEncode = msg.encode
 
-	log.Fatal("request = %+v", request)
 	var err error
 	p.reqBody, err = encodes.EncodeBody(encodes.EncodeGob, request)
 	if err != nil {
@@ -347,7 +370,10 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	sMqMsg.Encode = proto.Int32(p.reqEncode)
 	sMqMsg.Body = proto.String(p.reqBody)
 
-	c.chProducer.RpcSend_OnWriteMqMsg(sMqMsg)
+	if err := c.chProducer.RpcCall_OnWriteMqMsg(sMqMsg); err != nil {
+		log.Fatal("err", err)
+		return err
+	}
 
 	rMqMsgI := <-p.pending
 	rMqMsg := rMqMsgI.(*mq.MqMsg)
@@ -356,7 +382,6 @@ func (c *Client) Call(msg *Msg, method string, request interface{}, reply interf
 	if err != nil {
 		return err
 	}
-	log.Fatal("reply = %+v", reply)
 
 	return nil
 }

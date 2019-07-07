@@ -30,29 +30,16 @@ func (w *Wait) Wait() {
 type WaitCallBack func()
 type WaitCallBack2 func() bool
 
-func Run(callBack WaitCallBack) {
-	waitGroup := &sync.WaitGroup{}
-	waitGroup.Add(1)
-	go func() {
-		callBack()
-		waitGroup.Done()
-	}()
-	waitGroup.Wait()
-}
-
 func Timer(t time.Duration, callBack WaitCallBack2) {
 	timer := time.NewTimer(t)
-	isExit := false
 	for {
 		select {
 		case <-timer.C:
-			isExit = callBack()
+			if callBack() {
+				return
+			}
 		}
 
-		if isExit {
-			break
-		} else {
-			timer.Reset(t)
-		}
+		timer.Reset(t)
 	}
 }

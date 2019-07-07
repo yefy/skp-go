@@ -73,7 +73,7 @@ func NewServer(sI ServerI) *Server {
 	server.sI = sI
 	server.cacheNumber = 1000
 	server.state = stateStop
-
+	log.Fatal("NewServer11111 11111111111")
 	server.MsgPool = &sync.Pool{New: func() interface{} {
 		msg := &Msg{}
 		msg.Pending = make(chan interface{}, 1)
@@ -81,6 +81,7 @@ func NewServer(sI ServerI) *Server {
 	},
 	}
 
+	log.Fatal("NewServer11111 22222222222222")
 	server.ValuePools = make([]*sync.Pool, 8)
 	for i := 0; i < len(server.ValuePools); i++ {
 		valueLen := i + 1
@@ -91,10 +92,13 @@ func NewServer(sI ServerI) *Server {
 		}
 	}
 
+	log.Fatal("NewServer11111 33333333333")
 	server.sI.RPC_Start()
 
+	log.Fatal("NewServer11111 444444444444444")
 	server.Start(true)
 
+	log.Fatal("NewServer11111 5555555555")
 	return server
 }
 
@@ -157,7 +161,7 @@ func (server *Server) IsStart() bool {
 }
 
 func (server *Server) IsStop() bool {
-	return atomic.LoadInt32(&server.state) == stateStopping
+	return atomic.LoadInt32(&server.state) == stateStopping || atomic.LoadInt32(&server.state) == stateStop
 }
 
 func (server *Server) isStopping() bool {
@@ -182,7 +186,9 @@ func (server *Server) run(index int32) {
 	//timer := time.NewTicker(time.Second)
 	//重复定时器
 
-	var timer *time.Ticker
+	var timerData time.Duration = 1
+	var timerNumber time.Duration = 1
+	var timer *time.Timer = nil
 	var timerC <-chan time.Time = nil
 	for {
 		select {
@@ -190,13 +196,20 @@ func (server *Server) run(index int32) {
 			if server.isStopping() {
 				return
 			}
-			log.Fatal("RPC_Describe = %s, server.SendNumber = %d, server.recvNumber = %d", server.sI.RPC_Describe(), server.SendNumber, server.recvNumber)
+
+			timerNumber++
+			timer.Reset(time.Millisecond * timerData * timerNumber)
+
+			log.Debug(server.sI.RPC_Describe()+" : server.SendNumber = %d, server.recvNumber = %d", server.SendNumber, server.recvNumber)
 		case <-done:
+			log.Debug(server.sI.RPC_Describe() + " : done")
 			done = nil
 			if server.isStopping() {
 				return
 			}
-			timer = time.NewTicker(time.Second)
+			log.Debug(server.sI.RPC_Describe() + " : start timer")
+
+			timer = time.NewTimer(time.Millisecond * timerData * timerNumber)
 			timerC = timer.C
 		case cache := <-server.Cache:
 			msg := cache.(*Msg)
@@ -242,6 +255,7 @@ func (server *Server) Timer(t time.Duration, callBack WaitCallBack) bool {
 		callBack()
 		ch <- true
 	}()
+
 	select {
 	case <-timer.C:
 		return true

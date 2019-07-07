@@ -43,30 +43,41 @@ func (c *ConnChan) SetConnChan(cc *ConnChan) {
 	c.cc = cc
 }
 
-func (c *ConnChan) Write(b []byte) (int, error) {
+func (c *ConnChan) Write(b []byte) (n int, e error) {
+	defer func() {
+		if err := recover(); err != nil {
+			n = 0
+			e = err.(error)
+			return
+		}
+	}()
 	c.Cache <- b
 	return len(b), nil
 }
 
 func (c *ConnChan) Read(b []byte) (int, error) {
-	// rb := <-c.cc.Cache
-	// copy(b, rb)
-	// return len(rb), nil
-	t := c.t.Sub(time.Now())
-	timer := time.NewTimer(t)
-	for {
-		select {
-		case <-timer.C:
-			var err net.Error = &ConnChanError{}
-			return 0, err
-		case rb := <-c.cc.Cache:
-			copy(b, rb)
-			return len(rb), nil
+	if c.t.IsZero() {
+		rb := <-c.cc.Cache
+		copy(b, rb)
+		return len(rb), nil
+	} else {
+		t := c.t.Sub(time.Now())
+		timer := time.NewTimer(t)
+		for {
+			select {
+			case <-timer.C:
+				var err net.Error = &ConnChanError{}
+				return 0, err
+			case rb := <-c.cc.Cache:
+				copy(b, rb)
+				return len(rb), nil
+			}
 		}
 	}
 }
 
 func (c *ConnChan) Close() error {
+	close(c.Cache)
 	return nil
 }
 

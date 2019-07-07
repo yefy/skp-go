@@ -6,8 +6,14 @@ import (
 	"sync"
 )
 
-func NewClient(connI ConnI) *Client {
+type ClientI interface {
+	GetDescribe() string
+	Error(ConnI)
+}
+
+func NewClient(clientI ClientI, connI ConnI) *Client {
 	c := &Client{}
+	c.clientI = clientI
 	rpcU.NewServer(c)
 	c.SetConn(connI)
 
@@ -16,29 +22,37 @@ func NewClient(connI ConnI) *Client {
 
 type Client struct {
 	rpcU.ServerB
-	mutex sync.Mutex
-	connI ConnI
-	state int32
+	clientI ClientI
+	mutex   sync.Mutex
+	connI   ConnI
+	state   int32
 }
 
-func (c *Client) RPC_GetDescribe() string {
-	return "NewClient"
+func (c *Client) RPC_Describe() string {
+	return c.clientI.GetDescribe()
 }
 
-func (c *Client) Error(connI ConnI) {
-	defer c.mutex.Unlock()
-	c.mutex.Lock()
+func (c *Client) GetDescribe() string {
+	return c.clientI.GetDescribe()
+}
 
-	if c.state == ClientStateErr {
-		return
+func (c *Client) IsError(connI ConnI) bool {
+	if (c.GetState() & (ClientStateStopping | ClientStateStop)) > 0 {
+		return false
+	}
+
+	if (c.GetState() & ClientStateErr) > 0 {
+		return false
 	}
 
 	if reflect.ValueOf(c.connI).Pointer() != reflect.ValueOf(connI).Pointer() {
-		return
+		return false
 	}
 
-	c.closeConn()
-	c.state = ClientStateErr
+	c.DelState(ClientStateStart)
+	c.AddState(ClientStateErr)
+
+	return true
 }
 
 func (c *Client) SetState(state int32) {
@@ -46,6 +60,19 @@ func (c *Client) SetState(state int32) {
 	c.mutex.Lock()
 
 	c.state = state
+}
+
+func (c *Client) AddState(state int32) {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+
+	c.state |= state
+}
+
+func (c *Client) DelState(state int32) {
+	defer c.mutex.Unlock()
+	c.mutex.Lock()
+	c.state &= ^state
 }
 
 func (c *Client) GetState() int32 {
@@ -69,16 +96,14 @@ func (c *Client) SetConn(connI ConnI) {
 	c.closeConn()
 
 	c.connI = connI
-	c.state = ClientStateStart
 }
 
-func (c *Client) ClearConn2() ConnI {
+func (c *Client) ClearConn() ConnI {
 	defer c.mutex.Unlock()
 	c.mutex.Lock()
 
 	connI := c.connI
 	c.connI = nil
-	c.state = ClientStateInit
 
 	return connI
 }
@@ -88,7 +113,6 @@ func (c *Client) CloseConn() {
 	c.mutex.Lock()
 
 	c.closeConn()
-	c.state = ClientStateInit
 }
 
 func (c *Client) closeConn() {

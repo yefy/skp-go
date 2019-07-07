@@ -58,7 +58,6 @@ func (c *CHConsumer) DoMqMsg(rMqMsg *mq.MqMsg) {
 			return
 		}
 		rpcServer.SendReq(rMqMsg.GetEncode(), rMqMsg.GetMethod(), rMqMsg.GetBody(), func(outStr string, err error) {
-			log.Fatal("outStr = %+v, err = %+v", outStr, err)
 			sMqMsg, err := mq.ReplyMqMsg(rMqMsg.GetHarbor(), rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), outStr)
 			if err != nil {
 				log.Err(err.Error())

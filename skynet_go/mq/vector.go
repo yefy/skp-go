@@ -31,13 +31,17 @@ func (v *Vector) Read(timeout time.Duration) error {
 	}
 
 	size, err := v.connI.Read(v.connBuffer)
+
+	if timeout > 0 {
+		v.connI.SetReadDeadline(time.Time{})
+	}
+
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-			log.Fatal("timeout")
 			return errorCode.NewErrCode(errorCode.TimeOut, err.Error())
 		}
 
-		log.Fatal(err.Error())
+		//log.Debug(err.Error())
 		return errorCode.NewErrCode(errorCode.Unknown, err.Error())
 	}
 

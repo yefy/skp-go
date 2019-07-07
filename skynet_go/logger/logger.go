@@ -81,6 +81,7 @@ type Logger struct {
 	level  int
 	model  int
 	file   *os.File
+	cache  []byte
 }
 
 // New creates a new Logger. The out variable sets the
@@ -202,22 +203,25 @@ func (l *Logger) FormatHeader(t time.Time, funcName string, file string, line in
 			file = short
 		}
 
-		*buf = append(*buf, file...)
-		*buf = append(*buf, ':')
-		itoa(buf, line, -1)
-		*buf = append(*buf, " | "...)
-		*buf = append(*buf, funcName...)
+		l.cache = l.cache[:0]
+		l.cache = append(l.cache, funcName...)
+		l.cache = append(l.cache, ':')
+		l.cache = append(l.cache, file...)
+		l.cache = append(l.cache, ':')
+		itoa(&l.cache, line, -1)
+
+		*buf = append(*buf, fmt.Sprintf("%-60s", string(l.cache))...)
 	}
 
 	id := l.GetGID()
 	if len(id) > 0 {
 		*buf = append(*buf, " | "...)
-		*buf = append(*buf, id...)
+		*buf = append(*buf, fmt.Sprintf("%-3s", id)...)
 	}
 
 	if len(levelName) > 0 {
 		*buf = append(*buf, " | "...)
-		*buf = append(*buf, levelName...)
+		*buf = append(*buf, fmt.Sprintf("%-5s", levelName)...)
 	}
 
 }

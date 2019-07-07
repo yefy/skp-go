@@ -93,7 +93,7 @@ func NewService(obj ServerI) (*Service, error) {
 }
 
 type ServerI interface {
-	RPC_GetDescribe() string
+	RPC_Describe() string
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Stop()
@@ -105,7 +105,7 @@ type ServerB struct {
 
 func (sb *ServerB) RPC_SetServer(server *Server) {
 	if sb.server != nil {
-		log.Err("sb.server != nil")
+		log.Panic(errorCode.NewErrCode(0, server.RPC_Describe()))
 	}
 	sb.server = server
 }
@@ -145,7 +145,7 @@ func (server *Server) ObjectName() string {
 }
 
 func (server *Server) RPC_Describe() string {
-	return server.service.obj.RPC_GetDescribe()
+	return server.service.obj.RPC_Describe()
 }
 
 func (server *Server) RPC_Start() {
@@ -197,7 +197,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.service.objName, msg.Method, err))
 				}
 			}()
 
@@ -222,7 +222,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.service.objName, msg.Method, err))
 				}
 			}()
 
@@ -261,7 +261,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.service.objName, msg.Method, err))
 				}
 			}()
 

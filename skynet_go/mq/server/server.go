@@ -2,14 +2,12 @@ package server
 
 import (
 	"net"
-	"skp-go/skynet_go/encodes"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
 	"skp-go/skynet_go/rpc/rpcU"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 func NewTopicClients() *TopicClients {
@@ -19,37 +17,80 @@ func NewTopicClients() *TopicClients {
 }
 
 type TopicClients struct {
+	mutex        sync.Mutex
 	harborClient map[int32]*Client
+}
+
+func (t *TopicClients) IsOk(c *Client) bool {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	if c.IsSubscribeAll() && len(t.harborClient) > 0 {
+		log.Err("tag exist")
+		return false
+	}
+
+	for _, client := range t.harborClient {
+		for _, tag := range c.tags {
+			if client.IsSubscribe(tag) {
+				log.Err("tag exist")
+				return false
+			}
+		}
+	}
+
+	t.harborClient[c.harbor] = c
+
+	return true
+}
+
+func (t *TopicClients) GetClient(tag string) *Client {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+
+	for _, v := range t.harborClient {
+		if v.IsSubscribe(tag) {
+			return v
+		}
+	}
+	return nil
+}
+
+func (t *TopicClients) Del(c *Client) {
+	defer t.mutex.Unlock()
+	t.mutex.Lock()
+	delete(t.harborClient, c.harbor)
 }
 
 func NewServer() *Server {
 	s := &Server{}
 	rpcU.NewServer(s)
-	//s.instanceClient = make(map[string]*Client)
-	//	s.harborClient = make(map[int32]*Client)
-	s.topicClientsMap = make(map[string]*TopicClients)
-	s.topicTag = make(map[string]*SQProducer)
 	return s
 }
 
 type Server struct {
 	rpcU.ServerB
-	listen *net.TCPListener
-	harbor int32
-	mutex  sync.Mutex
-	//instanceClient map[string]*Client
+	listen         *net.TCPListener
+	harbor         int32
 	instanceClient sync.Map
-	//harborClient map[int32]*Client
-	harborClient    sync.Map
-	topicClientsMap map[string]*TopicClients
-	topicTag        map[string]*SQProducer
+	harborClient   sync.Map
+	topicClients   sync.Map
+	topicTag       sync.Map
+	waitClient     sync.Map
 }
 
-func (s *Server) RPC_GetDescribe() string {
-	return "NewServer"
+func (s *Server) RPC_Describe() string {
+	return "mq.Server"
 }
 
-func (s *Server) Listen(address string) error {
+func (s *Server) GetDescribe() string {
+	return "mq.Server"
+}
+
+func (s *Server) GetHarbor() int32 {
+	return atomic.AddInt32(&s.harbor, 1)
+}
+
+func (s *Server) Listen(address string, isWait bool) error {
 	var err error
 	tcpaddr, err := net.ResolveTCPAddr("tcp4", address)
 	if err != nil {
@@ -60,8 +101,11 @@ func (s *Server) Listen(address string) error {
 	if err != nil {
 		return log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
-
-	s.rpcSend_OnAccept()
+	if isWait {
+		s.OnAccept()
+	} else {
+		s.rpcSend_OnAccept()
+	}
 	return nil
 }
 
@@ -77,7 +121,7 @@ func (s *Server) OnAccept() {
 			return
 		}
 
-		s.listen.SetDeadline(time.Now().Add(3 * time.Second))
+		//s.listen.SetDeadline(time.Now().Add(3 * time.Second))
 		tcpConn, err := s.listen.AcceptTCP()
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			continue
@@ -88,14 +132,15 @@ func (s *Server) OnAccept() {
 			return
 		}
 
-		log.Fatal("本地IP地址: %s, 远程IP地址:%s", tcpConn.LocalAddr(), tcpConn.RemoteAddr())
+		log.Debug("本地IP地址: %s, 远程IP地址:%s", tcpConn.LocalAddr(), tcpConn.RemoteAddr())
 		go s.AddClient(tcpConn)
 	}
 }
 
 func (s *Server) AddClient(connI mq.ConnI) {
-	newClient := NewClient(s, connI)
-	newClient.Start()
+	c := NewClient(s, connI)
+	c.Start()
+	s.waitClient.Store(c, c)
 }
 
 func (s *Server) AddLocalClient(connI mq.ConnI) {
@@ -109,120 +154,19 @@ func (s *Server) Close() {
 	s.RPC_GetServer().Stop(true)
 }
 
-func (s *Server) OnClientRegister(c *Client, rMqMsg *mq.MqMsg) {
-	newClient := c
-	request := mq.RegisteRequest{}
-	if err := encodes.DecodeBody(rMqMsg.GetEncode(), rMqMsg.GetBody(), &request); err != nil {
-		c.Close()
-		return
-	}
-	log.Fatal("request = %+v", request)
-
-	if request.Instance == "" {
-		log.Err("not request.Instance")
-		newClient.Close()
-		return
-	}
-
-	replyFunc := func(replyClient *Client) {
-		reply := mq.RegisterReply{}
-		reply.Harbor = replyClient.harbor
-		sMqMsg, err := mq.ReplyMqMsg(replyClient.harbor, rMqMsg.GetPendingSeq(), rMqMsg.GetEncode(), &reply)
-		if err == nil {
-			replyClient.shProducer.RpcSend_OnWriteMqMsg(sMqMsg)
-		}
-	}
-
-	if request.Harbor > 0 {
-		clientI, clientOk := s.instanceClient.Load(request.Instance)
-		if clientOk == false {
-			log.Err("not request.Instance = %+v", request.Instance)
-			newClient.Close()
-			return
-		}
-
-		client := clientI.(*Client)
-		if client.harbor != request.Harbor {
-			log.Err("client.harbor != request.Harbor, client.harbor = %+v, request.Harbor = %+v", client.harbor, request.Harbor)
-			newClient.Close()
-		} else {
-			replyFunc(newClient)
-			connI := newClient.Client.ClearConn2()
-			newClient.Close()
-			client.SetConn(connI)
-		}
-	} else {
-		newClient.instance = request.Instance
-		newClient.harbor = atomic.AddInt32(&s.harbor, 1)
-		newClient.Subscribe(request.Topic, request.Tag)
-
-		_, clientOk := s.instanceClient.LoadOrStore(request.Instance, newClient)
-		if clientOk {
-			log.Err("exist request.Instance = %+v", request.Instance)
-			newClient.Close()
-			return
-		}
-		log.Fatal("1111111111111111")
-		replyFunc(newClient)
-		topicClients := s.topicClientsMap[newClient.topic]
-		if topicClients == nil {
-			topicClients = NewTopicClients()
-			s.topicClientsMap[newClient.topic] = topicClients
-		} else {
-			if newClient.IsSubscribeAll() {
-				log.Fatal("IsSubscribeAll")
-				//topicClientsMap all conn  close
-				for harbor, conn := range topicClients.harborClient {
-					log.Fatal("SendOnCloseAll harbor", harbor)
-					conn.CloseSelf()
-				}
-				topicClients = NewTopicClients()
-				s.topicClientsMap[newClient.topic] = topicClients
-			} else {
-				//关闭一样的tag conn
-				var delHarbors []int32
-				for harbor, conn := range topicClients.harborClient {
-					for _, tag := range newClient.tags {
-						if conn.IsSubscribe(tag) {
-							log.Fatal("SendOnCloseAll harbor", harbor)
-							conn.CloseSelf()
-							delHarbors = append(delHarbors, harbor)
-							break
-						}
-					}
-				}
-
-				for _, harbor := range delHarbors {
-					delete(topicClients.harborClient, harbor)
-				}
-			}
-		}
-
-		topicClients.harborClient[newClient.harbor] = newClient
-
-		s.harborClient.Store(newClient.harbor, newClient)
-		//newClient.Start()
-	}
-}
-
 func (s *Server) GetClient(topic string, tag string) *Client {
-	topicClients := s.topicClientsMap[topic]
-	if topicClients != nil {
-		for _, v := range topicClients.harborClient {
-			if v.IsSubscribe(tag) {
-				return v
-			}
-		}
+	if topicClientsI, ok := s.topicClients.Load(topic); ok {
+		topicClients := topicClientsI.(*TopicClients)
+		return topicClients.GetClient(tag)
 	}
+
 	return nil
 }
 
 func (s *Server) GetHarborClient(mqMsg *mq.MqMsg) *Client {
 	harbor := mqMsg.GetHarbor()
-	harborClientI, ok := s.harborClient.Load(harbor)
-	if ok {
-		harborClient := harborClientI.(*Client)
-		return harborClient
+	if harborClientI, ok := s.harborClient.Load(harbor); ok {
+		return harborClientI.(*Client)
 	}
 	//这里需要保存mqMsg用于排查问题
 	log.Fatal("not harbor = %d", harbor)
@@ -231,11 +175,51 @@ func (s *Server) GetHarborClient(mqMsg *mq.MqMsg) *Client {
 
 func (s *Server) GetSQProducer(mqMsg *mq.MqMsg) *SQProducer {
 	key := mqMsg.GetTopic() + "_" + mqMsg.GetTag()
-	q := s.topicTag[key]
-	if q == nil {
-		log.Fatal("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
-		q = NewSQProducer(s, mqMsg.GetTopic(), mqMsg.GetTag())
-		s.topicTag[key] = q
+	if qI, ok := s.topicTag.Load(key); ok {
+		return qI.(*SQProducer)
 	}
+
+	q := NewSQProducer(s, mqMsg.GetTopic(), mqMsg.GetTag())
+	if qI, ok := s.topicTag.LoadOrStore(key, q); ok {
+		q.Stop()
+		return qI.(*SQProducer)
+	}
+	log.Debug("NewQueue: mqMsg.GetTopic() = %+v, mqMsg.GetTag() = %+v", mqMsg.GetTopic(), mqMsg.GetTag())
 	return q
+}
+
+func (s *Server) OnMqDel(c *Client) {
+	s.instanceClient.Delete(c.instance)
+	s.harborClient.Delete(c.harbor)
+	if topicClientsI, ok := s.topicClients.Load(c.topic); ok {
+		topicClients := topicClientsI.(*TopicClients)
+		topicClients.Del(c)
+	}
+}
+
+func (s *Server) OnMqRegister(c *Client) bool {
+	s.waitClient.Delete(c)
+
+	if _, ok := s.instanceClient.LoadOrStore(c.instance, c); ok {
+		log.Err("c.instance exist")
+		return false
+	}
+
+	s.harborClient.Store(c.harbor, c)
+
+	var topicClients *TopicClients
+	topicClientsI, ok := s.topicClients.Load(c.topic)
+	if !ok {
+		topicClients = NewTopicClients()
+		if topicClientsI, ok := s.topicClients.LoadOrStore(c.topic, topicClients); ok {
+			topicClients = topicClientsI.(*TopicClients)
+		}
+	} else {
+		topicClients = topicClientsI.(*TopicClients)
+	}
+	if !topicClients.IsOk(c) {
+		return false
+	}
+
+	return true
 }

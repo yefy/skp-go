@@ -1,6 +1,7 @@
 package rpcD
 
 import (
+	"reflect"
 	"skp-go/skynet_go/errorCode"
 	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/rpc"
@@ -8,6 +9,7 @@ import (
 )
 
 type ServerI interface {
+	RPC_Describe() string
 	RPC_SetServer(*Server)
 	RPC_GetServer() *Server
 	RPC_Dispath(method string, args []interface{}) error
@@ -20,7 +22,7 @@ type ServerB struct {
 
 func (sb *ServerB) RPC_SetServer(server *Server) {
 	if sb.server != nil {
-		log.Err("sb.server != nil")
+		log.Panic(errorCode.NewErrCode(0, server.RPC_Describe()))
 	}
 	sb.server = server
 }
@@ -36,11 +38,14 @@ func (sb *ServerB) RPC_Stop() {
 type Server struct {
 	service ServerI
 	*rpc.Server
+	name string
 }
 
 func NewServer(obj ServerI) *Server {
 	server := &Server{}
 	server.service = obj
+	objValue := reflect.ValueOf(obj)
+	server.name = reflect.Indirect(objValue).Type().Name()
 	server.Server = rpc.NewServer(server)
 
 	return server
@@ -48,6 +53,10 @@ func NewServer(obj ServerI) *Server {
 
 func (server *Server) Object() interface{} {
 	return server.service
+}
+
+func (server *Server) RPC_Describe() string {
+	return server.service.RPC_Describe()
 }
 
 func (server *Server) RPC_Start() {
@@ -65,7 +74,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.name, msg.Method, err))
 				}
 			}()
 
@@ -76,7 +85,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.name, msg.Method, err))
 				}
 			}()
 
@@ -89,7 +98,7 @@ func (server *Server) RPC_DoMsg(msg *rpc.Msg) {
 		func() {
 			defer func() {
 				if err := recover(); err != nil {
-					msg.Err = log.ErrorCode(errorCode.NewErrCode(0, "%+v", err))
+					log.ErrorCode(errorCode.NewErrCode(0, "objName = %s, Method = %s, %+v", server.name, msg.Method, err))
 				}
 			}()
 

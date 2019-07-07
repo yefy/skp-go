@@ -18,7 +18,7 @@ type Test struct {
 	rpcE.ServerB
 }
 
-func (t *Test) RPC_GetDescribe() string {
+func (t *Test) RPC_Describe() string {
 	return "Test"
 }
 
@@ -30,22 +30,48 @@ func (t *Test) OnRegister(in *mq.RegisteRequest, out *mq.RegisterReply) error {
 
 func LocalClientTest(s *server.Server) {
 	time.Sleep(time.Second * 1)
-	log.SetLevel(log.Lerr)
 
-	mqClient := client.NewLocalClient("Test", s)
-	mqClient.Subscribe("Test", "*")
+	mqClient := client.NewLocalClient("LocalClientTest", s)
+	mqClient.Subscribe("LocalClientTest", "*")
 	mqClient.RegisterServer(&Test{})
 	mqClient.Start()
 
 	request := mq.RegisteRequest{}
 	request.Instance = "Instance"
-	request.Harbor = 13
+	request.Harbor = 1
 	request.Topic = "Topic"
 	request.Tag = "Tag"
+
 	reply := mq.RegisterReply{}
-	msg := client.Msg{Topic: "Test", Tag: "0"}
+
+	msg := client.Msg{Topic: "LocalClientTest", Tag: "0"}
 	if err := mqClient.Call(&msg, "Test.OnRegister", &request, &reply); err != nil {
 		log.Fatal("error")
+	}
+
+	log.Fatal("reply.Harbor = %d", reply.Harbor)
+	mqClient.Close()
+}
+
+func ClientTest(t *testing.T) {
+	time.Sleep(time.Second * 1)
+
+	mqClient := client.NewClient("ClientTest", ":5673")
+	mqClient.Subscribe("ClientTest", "*")
+	mqClient.RegisterServer(&Test{})
+	mqClient.Start()
+
+	request := mq.RegisteRequest{}
+	request.Instance = "Instance"
+	request.Harbor = 2
+	request.Topic = "Topic"
+	request.Tag = "Tag"
+
+	reply := mq.RegisterReply{}
+
+	msg := client.Msg{Topic: "ClientTest", Tag: "0"}
+	if err := mqClient.Call(&msg, "Test.OnRegister", &request, &reply); err != nil {
+		t.Error()
 	}
 
 	log.Fatal("reply.Harbor = %d", reply.Harbor)
@@ -55,11 +81,9 @@ func LocalClientTest(s *server.Server) {
 func Test_Server(t *testing.T) {
 	log.SetLevel(log.Lerr)
 	s := server.NewServer()
-	//go LocalClientTest(s)
-	s.Listen(":5673")
-
-	wait := make(chan int)
-	<-wait
+	go LocalClientTest(s)
+	go ClientTest(t)
+	s.Listen(":5673", true)
 }
 
 //go test

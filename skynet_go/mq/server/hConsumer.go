@@ -35,17 +35,17 @@ func (c *SHConsumer) Error(connI mq.ConnI) {
 
 func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
 	if c.client.harbor == 0 {
-		log.Err("%s, harbor = %d", c.GetDescribe(), c.client.harbor)
+		log.Debug(c.GetDescribe()+" : harbor = %d", c.client.harbor)
 		if mqMsg == nil {
-			log.Err("%s, mqMsg == nil", c.GetDescribe())
+			log.Err(c.GetDescribe() + " : mqMsg == nil")
 			c.client.CloseSelf()
 			return
 		} else if mqMsg.GetTyp() == mq.TypeRespond {
-			log.Err("%s, mqMsg.GetTyp() == mq.TypeRespond", c.GetDescribe())
+			log.Err(c.GetDescribe() + " : mqMsg.GetTyp() == mq.TypeRespond")
 			c.client.CloseSelf()
 			return
 		} else if mqMsg.GetTopic() != "Mq" {
-			log.Err("%s, mqMsg.GetTopic() != Mq", c.GetDescribe())
+			log.Err(c.GetDescribe() + " : mqMsg.GetTopic() != Mq")
 			c.client.CloseSelf()
 			return
 		}
@@ -57,7 +57,7 @@ func (c *SHConsumer) DoMqMsg(mqMsg *mq.MqMsg) {
 
 	if mqMsg.GetTopic() == "Mq" {
 		if mqMsg.GetTag() != "*" {
-			log.Err("%s, mqMsg.GetTag() != *", c.GetDescribe())
+			log.Err(c.GetDescribe() + " : mqMsg.GetTag() != *")
 			c.client.CloseSelf()
 			return
 		}

@@ -19,16 +19,27 @@ func NewConsumer(cI ConsumerI) *Consumer {
 	rpcU.NewServer(c)
 	c.cI = cI
 	c.mqConn = NewMqConn()
+	c.setReadTimeout(3)
 	return c
 }
 
 type Consumer struct {
 	rpcU.ServerB
-	cI     ConsumerI
-	mqConn *MqConn
+	cI          ConsumerI
+	mqConn      *MqConn
+	millisecond int32
+	ReadTimeout time.Duration
 }
 
-func (c *Consumer) RPC_GetDescribe() string {
+func (c *Consumer) setReadTimeout(timeout time.Duration) {
+	c.ReadTimeout = timeout
+}
+
+func (c *Consumer) RPC_Describe() string {
+	return c.cI.GetDescribe()
+}
+
+func (c *Consumer) GetDescribe() string {
 	return c.cI.GetDescribe()
 }
 
@@ -44,10 +55,6 @@ func (c *Consumer) Stop() {
 }
 
 func (c *Consumer) GetConn() bool {
-	// if c.mqConn.IsOk() {
-	// 	return true
-	// }
-
 	connI := c.cI.GetConn()
 	if connI == nil {
 		return false
@@ -58,34 +65,43 @@ func (c *Consumer) GetConn() bool {
 	return true
 }
 
-func (c *Consumer) GetDescribe() string {
-	return c.cI.GetDescribe()
-}
-
 func (c *Consumer) Error() {
 	c.cI.Error(c.mqConn.GetConn())
+}
+
+func (c *Consumer) initTimeOut() {
+	c.millisecond = 0
+}
+
+func (c *Consumer) addConnTimeOut(millisecond int32) {
+	c.millisecond += millisecond
+	if c.millisecond > 10000 {
+		log.Debug(c.GetDescribe() + " : GetConn timeout")
+		c.millisecond = 0
+	}
 }
 
 func (c *Consumer) OnReadMqMsg() {
 	for {
 		if c.RPC_GetServer().IsStop() {
-			log.Fatal("RPC_GetDescribe = %s : Consumer OnReadMqMsg stop", c.RPC_GetDescribe())
+			log.Debug(c.GetDescribe() + " : OnReadMqMsg stop")
 			return
 		}
 
 		if !c.GetConn() {
 			time.Sleep(100 * time.Millisecond)
+			c.addConnTimeOut(100)
 			continue
 		}
 
-		mqMsg, err := c.mqConn.ReadMqMsg(3)
+		mqMsg, err := c.mqConn.ReadMqMsg(c.ReadTimeout)
+		c.ReadTimeout = 0
 		if err != nil {
 			errCode := errorCode.GetCode(err)
 			if errCode == errorCode.TimeOut {
 				c.cI.DoMqMsg(nil)
 			} else {
 				c.Error()
-				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 		}

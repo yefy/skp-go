@@ -1,12 +1,15 @@
 package client
 
 import (
+	log "skp-go/skynet_go/logger"
 	"skp-go/skynet_go/mq"
 )
 
 func NewCHProducer(client *Client) *CHProducer {
 	p := &CHProducer{}
+	log.Fatal("NewCHProducer 000000000")
 	p.Producer = mq.NewProducer(p)
+	log.Fatal("NewCHProducer 1111111111")
 	p.client = client
 	return p
 }

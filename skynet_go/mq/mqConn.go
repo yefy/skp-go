@@ -58,7 +58,7 @@ func (mc *MqConn) GetConn() ConnI {
 }
 
 func (mc *MqConn) WriteMqMsg(mqMsg *MqMsg) error {
-	log.Fatal("mqMsg = %+v", proto.MarshalTextString(mqMsg))
+	log.All("mqMsg = %+v", proto.MarshalTextString(mqMsg))
 
 	mqMsgBytes, err := proto.Marshal(mqMsg)
 	if err != nil {
@@ -188,6 +188,6 @@ func (mc *MqConn) getMqMsg() (*MqMsg, error) {
 		return nil, log.Panic(errorCode.NewErrCode(0, err.Error()))
 	}
 	mc.vector.Skip(size)
-	log.Fatal("msg = %+v", proto.MarshalTextString(msg))
+	log.All("msg = %+v", proto.MarshalTextString(msg))
 	return msg, nil
 }
